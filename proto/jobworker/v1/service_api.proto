@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package jobworker.v1;
+
+option go_package = "github.com/tjper/teleport/proto/jobworker/v1";
+
+// JobWorkerService provides methods that allow clients to start and interact
+// with arbitrary commands running on the service's host.
+service JobWorkerService {
+  rpc Start(StartRequest) returns (StartResponse){}
+  rpc Stop(StopRequest) returns (StopResponse){}
+  rpc Status(StatusRequest) returns (StatusResponse){}
+  rpc Output(OutputRequest) returns (stream OutputResponse){}
+}
+
+// StartRequest specifies job details for JobWorkerService.Start.
+message StartRequest {
+  // command is the arbitrary command to execute on JobWorkerService's host.
+  string command = 1;
+}
+
+// StartResponse informs clients started job details.
+message StartResponse {
+  string job_id = 1;
+}
+
+// StopRequest specifies a job ID to stop for JobWorkerService.Stop.
+message StopRequest {
+  string job_id = 1;
+}
+
+// StopResponse is a placeholder. This will to maintain backwards compatibility
+// in the event response details exist in the future.
+message StopResponse {}
+
+// StatusRequest specifies a job ID to perform a status check on for
+// JobworkerService.Status.
+message StatusRequest {
+  string job_id = 1;
+}
+
+// StatusResponse informs clients the status of a job.
+message StatusResponse {
+  // status is the current job state.
+  string status = 1;
+}
+
+message OutputRequest {
+  string job_id = 1;
+  // tail instructs JobWorkerService.Output to tail the job output.
+  bool   tail   = 2;
+}
+
+message OutputResponse {
+  // output is the job output.
+  bytes output = 1;
+}
