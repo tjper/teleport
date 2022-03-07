@@ -29,8 +29,8 @@ A set of certificates and secrets will exist in the `certs/` directory. All cert
 - user_bravo.key      user_bravo private key
 - user_bravo.crt      user_bravo client certificate
 
-**user_alpha** will have permission to *mutate* and *query*
-**user_bravo** will have permission to *query*
+- **user_alpha** will have permission to *mutate* and *query*
+- **user_bravo** will have permission to *query*
 
 ## Authorization
 
@@ -183,6 +183,7 @@ Global Flags:
   --key       client private key
   --ca        certificate authority shared by server and client
 
+---
 
 Command:
  `jobworker-cli start` Start a job.
@@ -204,17 +205,23 @@ Flags:
   --io-max-riops
   --io-max-wiops
 
+---
+
 Command:
 `jobworker-cli stop` Stop a job.
 
 Usage:
   jobworker-cli [global flags] stop job_id
 
+---
+
 Command:
 `jobworker-cli status` Fetch job status.
 
 Usage:
   jobworker-cli [global flags] status job_id
+
+---
 
 Command:
 `jobworker-cli status` Fetch job output.
@@ -224,3 +231,4 @@ Usage:
 
 Flags:
   --tail    tail output of job
+```
