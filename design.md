@@ -15,8 +15,6 @@ This document outlines the design of the systems within this repo.
 
 Package cgroups will provide mechanisms setting up, cleaning up, and interacting with Linux cgroups.
 
-All cgroups created will be created under the `/cgroup2/jobworker` directory. This is done to simplify cleanup and debugging. Cleanup of `/cgroup2/jobworker` will require walking through each sub-directory, moving all pids to the root cgroup, and then removing each `/cgroup2/jobworker` sub-directory.
-
 The `Service` type will be responsible for the following:
 - mounting/unmounting cgroup2
 - directory `/cgroup2/jobworker` setup/cleanup
@@ -47,16 +45,16 @@ func WithCPUMax(max int) CgroupOption
 ...
 ```
 
+---
 
 ### job
 
-Package job will provide a `Service` type for starting, stopping and fetching `Job` instances.
-
-On `Service` creation, a directory will be created at `/var/log/jobworker`. When *jobworker* is closed, this *log directory* will be removed as part of cleanup. Within the *log directory* will be log files with the corresponding `Job` ID as their name.
+Package job will provide a `Service` type for managing `Job` instances.
 
 The `Service` type will be responsible for the following.
-- Setup and cleanup of logging files.
-- Maintaining a concurrent-safe map with `Job.ID` as the key and `Job` as the value.
+- Setup and cleanup of `var/log/jobworker` logging directory.
+- Maintaining a concurrent-safe jobs map with `Job.ID` as the key and `Job` as the value.
+- Provide methods to start, stop, and fetch managed `Job` instances
 
 The `Job` type will be responsible for the following.
 - Ensure thread safe access to attributes where necessary.
@@ -68,7 +66,7 @@ The `Job` type will be responsible for the following.
 
 The starting, stopping and monitoring of a `Job` instances *command* will be done mostly by utilizing the `os/exec` package.
 
-In order to track *command* status, `os/exec.Cmd.Start()` will be called to start a *command* and a goroutine will be launched to `os/exec.Cmd.Wait()` for *command* completion and record exit status.
+In order to track *command* status, start (`os/exec.Cmd.Start()`) will be called and a goroutine will be launched to wait (`os/exec.Cmd.Wait()`) for *command* completion and record exit status.
 
 ##### Streaming Output
 
@@ -159,8 +157,8 @@ A set of certificates and secrets will exist in the `certs/` directory. All cert
 Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. An internal map will specify which roles each user has, and will be used to determine if the request should be processed.
 
 All roles are specified below:
-- mutate     allows a job to be started or stopped
-- query      allows job status to be retrieved or job output to be streamed
+- *mutate*: allows a job to be started or stopped
+- *query*: allows job status to be retrieved or job output to be streamed
 
 ## CLI
 
