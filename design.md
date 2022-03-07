@@ -167,8 +167,10 @@ I wanted to highlight the areas of the application that are critical to test tho
 
 Cgroups have a number of sharp edges and nuances to them. Tests will ensure the following:
 - mounting/unmounting
+- mounting when mount has alread been performed
 - setup/cleanup
-- Memory, cpus, and io controls are being applied and are reflected in process stats.
+- setup when `/cgroup2/jobworker` already exists
+- memory, cpus, and io controls are being applied and are reflected in process stats
 
 #### Authorization
 
@@ -177,16 +179,17 @@ Authorization tests will be fairly simple. They will ensure clients are only abl
 #### Authentication
 
 Authentication tests will ensure the following:
-- Client must be using TLS 1.3.
-- Client certificate must be signed by the RootCA.
-- Client that does not authenticate is unable to connect.
+- client must be using TLS 1.3
+- client certificate must be signed by the CA
+- client that does not authenticate is unable to connect
 
 #### Jobs
 
 Job tests will ensure the following:
-- Job starting and supporting processes result in commands being processed and correct status tracking.
-- Logging setup and cleanup is being performed as expected.
-- Streaming output results are identical and correct across multiple concurrent clients.
+- logging setup/cleanup
+- logging setup when `/var/log/jobworker` already exists
+- job starting and supporting processes result in commands being processed and correct status tracking
+- streaming output results are identical and correct across multiple concurrent clients
 
 ## CLI
 
