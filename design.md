@@ -2,6 +2,13 @@
 
 This document outlines the design of the systems within this repo.
 
+## Design Approach
+
+There's two main aspects to my approach I tried to maintain in each package.
+1. Have critical functionality hang off a `Service` type. This allows me to minimize global state, create a recognizable pattern for readers, and utilize interfaces if needed.
+2. Always take the simplest approach. It was made clear in the challenge description a high performing nor a scalable system was being asked for. Therefore, I designed components in a manner I know will not scale in order to keep things simple. More on this in [Performance Concerns](##performance-concerns).
+
+
 ## API
 
 Click [here](https://github.com/tjper/teleport/blob/design/proto/jobworker/v1/service_api.proto) for API definition.
@@ -24,6 +31,7 @@ Once a client establishes a connection over TLS, the client certificate's `Commo
 All roles are specified below:
 - *mutate*: allows a job to be started or stopped
 - *query*: allows job status to be retrieved or job output to be streamed
+
 
 ## Critical Libraries
 
@@ -122,7 +130,7 @@ type Job struct {
 func (j Job) Output() []byte
 func (j Job) StreamOutput(ctx context.Context) (<-chan byte, error)
 ```
-
+---
 
 ### grpc
 
@@ -133,7 +141,7 @@ The `JobWorker` type will be responsible for the following.
 - Utilize `job.Service` and `cgroups.Service` in coordination to satisfy requests.
 - Validate request inputs.
 
-##### Types
+#### Types
 
 ```
 type JobWorker struct {
@@ -148,6 +156,9 @@ func (jw JobWorker) Status(ctx context.Context, r *pb.StartRequest) (*pb.StatusR
 func (jw JobWorker) Output(ctx context.Context, r *pb.OutputRequest) (*pb.OutputResponse, error)
 ```
 
+## Performance Concerns
+
+If I was going to scale this application, the first component I would revisit is output streaming. In-memory streaming that backed up to disk at some threshold could be considered.
 
 ## CLI
 
