@@ -94,7 +94,19 @@ In order to stop a command, the following will be done. `os/exec CommandContext(
 
 ##### Streaming Output
 
-Streaming output will involve reading a log file from `/var/log/jobworker` in chunks and writing it to the client until EOF is reached. If the client uses the `--tail` flag, the output will be streamed until the client ends the stream.
+Streaming output will involve reading a log file from `/var/log/jobworker` in chunks and writing it to the client until the client ends the stream.
+
+###### Implementation
+
+When an output stream is requested, the following will occur:
+  - `Job` will be fetched by `job.Service`
+  - `Job.OutputStream` will be called in its own goroutine and accept `context.Context` and `chan<- byte` arguments.
+  - `Job.OutputStream` will open the log file, and defer closing the fd.
+  - `Job.OutputStream` will start a goroutine listening on `<-ctx.Done()`.
+  - `Job.OutputStream` will read from log file, in chunks.
+  - If the `context.Context` is cancelled, `job.OutputStream` will close the `io.ReaderCloser`, close the `chan<- byte`, and return.
+  - Meanwhile, `grpc.Service.Output()` is streaming these log chunks to a client.
+
 
 ##### JobStatus
 

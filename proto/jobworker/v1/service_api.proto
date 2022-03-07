@@ -56,8 +56,6 @@ message StatusResponse {
 // OutputRequest specifies job and process details for JobWorkerService.Output.
 message OutputRequest {
   string job_id = 1;
-  // tail instructs JobWorkerService.Output to tail the job output.
-  bool   tail   = 2;
 }
 
 // OutputResponse informs clients the output of a job. OutputResponse is part
