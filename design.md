@@ -13,7 +13,7 @@ This document outlines the design of the systems within this repo.
 
 ### cgroups
 
-Package cgroups will provide mechanisms setting up, cleaning up, and interacting with Linux cgroups.
+Package cgroups will provide mechanisms to setup, cleanup, and interact with Linux cgroups.
 
 The `Service` type will be responsible for the following:
 - mounting/unmounting cgroup2
@@ -59,8 +59,8 @@ The `Service` type will be responsible for the following.
 The `Job` type will be responsible for the following.
 - Ensure thread safe access to attributes where necessary.
 - Ensure status reflects *command* state.
-- Provide mechanisms to start and stop *command*.
-- Provide mechanisms to stream *output* to multiple clients concurrently.
+- Provide unexported mechanisms to start and stop *command*.
+- Provide exported mechanisms to stream *output* to multiple clients concurrently.
 
 ##### Start, Stop, and Status
 
@@ -76,9 +76,9 @@ Streaming output will involve reading a log file from `/var/log/jobworker` in ch
 
 The JobStatus type indicates the status of a job. The status will be one of the following:
 
-- running   Job has been started and is currently running.
-- stopped   Job has been forcibly stopped by jobworker.
-- exited    Job has exited (will include exit code).
+- *running*: Job has been started and is currently running.
+- *stopped*: Job has been forcibly stopped by jobworker.
+- *exited*: Job has exited (will include exit code).
 
 #### Types
 
@@ -113,6 +113,7 @@ Package grpc will provide a `JobWorker` type that implements the gRPC server stu
 The `JobWorker` type will be responsible for the following.
 - Ensuring all requests have the necessary permissions to be carried out.
 - Utilize `job.Service` and `cgroups.Service` in coordination to satisfy requests.
+- Validate request inputs.
 
 ##### Types
 
@@ -133,7 +134,7 @@ func (jw JobWorker) Output(ctx context.Context, r *pb.OutputRequest) (*pb.Output
 
 Click [here](https://github.com/tjper/teleport/blob/main/proto/jobworker/v1/service_api.proto) for API definition.
 
-### Authentication
+## Authentication
 
 Client and server will utilize mTLS.
 
@@ -152,7 +153,7 @@ A set of certificates and secrets will exist in the `certs/` directory. All cert
 **user_alpha** will have permission to *mutate* and *query*
 **user_bravo** will have permission to *query*
 
-### Authorization
+## Authorization
 
 Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. An internal map will specify which roles each user has, and will be used to determine if the request should be processed.
 
