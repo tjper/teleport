@@ -9,6 +9,37 @@ This document outlines the design of the systems within this repo.
 - *output*: The data typically written to stdout and stderr by a *command*.
 - *log directory*: Location of *jobworker* *command* *output*, /var/log/jobworker.
 
+## API
+
+Click [here](https://github.com/tjper/teleport/blob/main/proto/jobworker/v1/service_api.proto) for API definition.
+
+## Authentication
+
+Client and server will utilize mTLS.
+
+TLS 1.3 will be used to ensure a secure cipher suite is utilized. As of Go 1.17, the cipher suites are ordered by `crypto/tls` based on range of factors. https://go.dev/blog/tls-cipher-suites
+
+A set of certificates and secrets will exist in the `certs/` directory. All certificates will be signed by the included CA.
+
+- ca.crt              CA certificate
+- jobworker.key       jobworker server private key
+- jobworker.crt       jobworker certificate
+- user_alpha.key      user_alpha private key
+- user_alpha.crt      user_alpha client certificate
+- user_bravo.key      user_bravo private key
+- user_bravo.crt      user_bravo client certificate
+
+**user_alpha** will have permission to *mutate* and *query*
+**user_bravo** will have permission to *query*
+
+## Authorization
+
+Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. An internal map will specify which roles each user has, and will be used to determine if the request should be processed.
+
+All roles are specified below:
+- *mutate*: allows a job to be started or stopped
+- *query*: allows job status to be retrieved or job output to be streamed
+
 ## Critical Libraries
 
 ### cgroups
@@ -130,36 +161,6 @@ func (jw JobWorker) Status(ctx context.Context, r *pb.StartRequest) (*pb.StatusR
 func (jw JobWorker) Output(ctx context.Context, r *pb.OutputRequest) (*pb.OutputResponse, error)
 ```
 
-## API
-
-Click [here](https://github.com/tjper/teleport/blob/main/proto/jobworker/v1/service_api.proto) for API definition.
-
-## Authentication
-
-Client and server will utilize mTLS.
-
-TLS 1.3 will be used to ensure a secure cipher suite is utilized. As of Go 1.17, the cipher suites are ordered by `crypto/tls` based on range of factors. https://go.dev/blog/tls-cipher-suites
-
-A set of certificates and secrets will exist in the `certs/` directory. All certificates will be signed by the included CA.
-
-- ca.crt              CA certificate
-- jobworker.key       jobworker server private key
-- jobworker.crt       jobworker certificate
-- user_alpha.key      user_alpha private key
-- user_alpha.crt      user_alpha client certificate
-- user_bravo.key      user_bravo private key
-- user_bravo.crt      user_bravo client certificate
-
-**user_alpha** will have permission to *mutate* and *query*
-**user_bravo** will have permission to *query*
-
-## Authorization
-
-Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. An internal map will specify which roles each user has, and will be used to determine if the request should be processed.
-
-All roles are specified below:
-- *mutate*: allows a job to be started or stopped
-- *query*: allows job status to be retrieved or job output to be streamed
 
 ## CLI
 
