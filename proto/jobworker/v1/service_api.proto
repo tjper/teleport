@@ -16,12 +16,23 @@ service JobWorkerService {
 // StartRequest specifies job details for JobWorkerService.Start.
 message StartRequest {
   // command is the arbitrary command to execute on JobWorkerService's host.
-  string command = 1;
+  string command          = 1;
+  string memory           = 2;
+  float  cpus             = 3;
+  string device_write_bps = 4;
+  string device_read_bps  = 5;
+
 }
 
 // StartResponse informs clients started job details.
 message StartResponse {
-  string job_id = 1;
+  string job_id           = 1;
+  string command          = 2;
+  string status           = 3;
+  string memory           = 4;
+  float  cpus             = 5;
+  string device_write_bps = 6;
+  string device_read_bps  = 7;
 }
 
 // StopRequest specifies a job ID to stop for JobWorkerService.Stop.
