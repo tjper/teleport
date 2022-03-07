@@ -166,7 +166,7 @@ I wanted to highlight the areas of the application that are critical to test tho
 
 Cgroups have a number of sharp edges and nuances to them. Tests will ensure the following:
 - mounting/unmounting
-- mounting when mount has alread been performed
+- mounting when mount has already been performed
 - setup/cleanup
 - setup when `/cgroup2/jobworker` already exists
 - memory, cpus, and io controls are being applied and are reflected in process stats
@@ -214,7 +214,7 @@ Global Flags:
 ---
 
 Command:
- `jobworker-cli start` Start a job.
+ `jobworker-cli start` Start a job. Job details are returned.
 
 Usage:
   jobworker-cli [global flags] start [flags] command...
