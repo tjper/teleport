@@ -23,4 +23,4 @@ Implement a prototype job worker service that provides an API to run arbitrary L
 
 ## Design
 
-The design of this system is outlined [here](https://github.com/tjper/teleport/blob/main/design.md).
+The design of this system is outlined [here](https://github.com/tjper/teleport/blob/design/design.md).

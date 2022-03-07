@@ -11,7 +11,7 @@ This document outlines the design of the systems within this repo.
 
 ## API
 
-Click [here](https://github.com/tjper/teleport/blob/main/proto/jobworker/v1/service_api.proto) for API definition.
+Click [here](https://github.com/tjper/teleport/blob/design/proto/jobworker/v1/service_api.proto) for API definition.
 
 ## Authentication
 
