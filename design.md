@@ -21,14 +21,6 @@ TLS 1.3 will be used to ensure a secure cipher suite is utilized. As of Go 1.17,
 
 A set of certificates and secrets will exist in the `certs/` directory. All certificates will be signed by the included CA.
 
-- ca.crt              CA certificate
-- jobworker.key       jobworker server private key
-- jobworker.crt       jobworker certificate
-- user_alpha.key      user_alpha private key
-- user_alpha.crt      user_alpha client certificate
-- user_bravo.key      user_bravo private key
-- user_bravo.crt      user_bravo client certificate
-
 - **user_alpha** will have permission to *mutate* and *query*
 - **user_bravo** will have permission to *query*
 
