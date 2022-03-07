@@ -4,33 +4,27 @@ This document outlines the design of the systems within this repo.
 
 ## Terms
 
-- **jobworker**: Application responsible for managing the execution of arbitrary commands on the host Linux system.
-- **command**: An arbitrary command started by the **jobworker**.
-- **output**: The data typically written to stdout and stderr by a **command**.
-- **log directory**: Location of **jobworker** **command** **output**, `/var/log/jobworker`.
+- *jobworker*: Application responsible for managing the execution of arbitrary commands on the host Linux system.
+- *command*: An arbitrary command started by the *jobworker*.
+- *output*: The data typically written to stdout and stderr by a *command*.
+- *log directory*: Location of *jobworker* *command* *output*, /var/log/jobworker.
 
 ## Critical Libraries
-
-Below are the outlines of libraries critical to the **jobworker**.
-
-Code below should be considered pseudo-code and will not compile.
 
 ### cgroups
 
 Package cgroups will provide mechanisms setting up, cleaning up, and interacting with Linux cgroups.
 
-All cgroups created related to the jobworker will be created under the `/cgroup2/jobworker` directory. This allows for easier cleanup and debugging.
-
-Cleanup of `/cgroup2/jobworker` will require walking through each sub-directory, moving all pids to the root cgroup, and then removing each `/cgroup2/jobworker` sub-directory.
+All cgroups created will be created under the `/cgroup2/jobworker` directory. This is done to simplify cleanup and debugging. Cleanup of `/cgroup2/jobworker` will require walking through each sub-directory, moving all pids to the root cgroup, and then removing each `/cgroup2/jobworker` sub-directory.
 
 The `Service` type will be responsible for the following:
 - mounting/unmounting cgroup2
 - directory `/cgroup2/jobworker` setup/cleanup
 - creating/removing a cgroup
 - updating cgroup controllers
-- Placing a process into a cgroup.
+- placing a process into a cgroup
 
-##### Types
+#### Types
 
 ```
 type Service struct {
@@ -53,11 +47,12 @@ func WithCPUMax(max int) CgroupOption
 ...
 ```
 
+
 ### job
 
 Package job will provide a `Service` type for starting, stopping and fetching `Job` instances.
 
-On `Service` creation, a directory will be created at `/var/log/jobworker`. When the application is closed, this **log directory** will be removed as part of cleanup. Within the **log directory** will be log files with the corresponding `Job` ID as their name.
+On `Service` creation, a directory will be created at `/var/log/jobworker`. When *jobworker* is closed, this *log directory* will be removed as part of cleanup. Within the *log directory* will be log files with the corresponding `Job` ID as their name.
 
 The `Service` type will be responsible for the following.
 - Setup and cleanup of logging files.
@@ -65,15 +60,15 @@ The `Service` type will be responsible for the following.
 
 The `Job` type will be responsible for the following.
 - Ensure thread safe access to attributes where necessary.
-- Ensure status reflects **command** state.
-- Provide mechanisms to start and stop **command**.
-- Provide mechanisms to stream **output** to multiple clients concurrently.
+- Ensure status reflects *command* state.
+- Provide mechanisms to start and stop *command*.
+- Provide mechanisms to stream *output* to multiple clients concurrently.
 
 ##### Start, Stop, and Status
 
-The starting, stopping and monitoring of a `Job` instances **command** will be done mostly by utilizing the `os/exec` package.
+The starting, stopping and monitoring of a `Job` instances *command* will be done mostly by utilizing the `os/exec` package.
 
-In order to track **command** status, `os/exec.Cmd.Start()` will be called to start a **command** and a goroutine will be launched to `os/exec.Cmd.Wait()` for **command** completion and record exit status.
+In order to track *command* status, `os/exec.Cmd.Start()` will be called to start a *command* and a goroutine will be launched to `os/exec.Cmd.Wait()` for *command* completion and record exit status.
 
 ##### Streaming Output
 
@@ -87,7 +82,7 @@ The JobStatus type indicates the status of a job. The status will be one of the 
 - stopped   Job has been forcibly stopped by jobworker.
 - exited    Job has exited (will include exit code).
 
-##### Types
+#### Types
 
 ```
 type Service struct {
@@ -169,6 +164,7 @@ All roles are specified below:
 
 ## CLI
 
+```
 A simple interface for interacting with a jobworker server.
 
 Usage:
@@ -187,9 +183,9 @@ Global Flags:
   --key       client private key
   --ca        certificate authority shared by server and client
 
----
 
-`jobworker-cli start` Start a job.
+Command:
+ `jobworker-cli start` Start a job.
 
 Usage:
   jobworker-cli [global flags] start [flags] command...
@@ -208,22 +204,19 @@ Flags:
   --io-max-riops
   --io-max-wiops
 
----
-
+Command:
 `jobworker-cli stop` Stop a job.
 
 Usage:
   jobworker-cli [global flags] stop job_id
 
----
-
+Command:
 `jobworker-cli status` Fetch job status.
 
 Usage:
   jobworker-cli [global flags] status job_id
 
----
-
+Command:
 `jobworker-cli status` Fetch job output.
 
 Usage:
