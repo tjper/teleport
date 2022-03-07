@@ -2,13 +2,6 @@
 
 This document outlines the design of the systems within this repo.
 
-## Terms
-
-- *jobworker*: Application responsible for managing the execution of arbitrary commands on the host Linux system.
-- *command*: An arbitrary command started by the *jobworker*.
-- *output*: The data typically written to stdout and stderr by a *command*.
-- *log directory*: Location of *jobworker* *command* *output*, /var/log/jobworker.
-
 ## API
 
 Click [here](https://github.com/tjper/teleport/blob/design/proto/jobworker/v1/service_api.proto) for API definition.
@@ -80,16 +73,16 @@ The `Service` type will be responsible for the following.
 - Provide methods to start, stop, and fetch managed `Job` instances
 
 The `Job` type will be responsible for the following.
+- Provide unexported mechanisms to start and stop arbitrary commands.
+- Provide exported mechanisms to stream output to multiple clients concurrently.
 - Ensure thread safe access to attributes where necessary.
-- Ensure status reflects *command* state.
-- Provide unexported mechanisms to start and stop *command*.
-- Provide exported mechanisms to stream *output* to multiple clients concurrently.
+- Ensure status reflects command state.
 
 ##### Start, Stop, and Status
 
-The starting, stopping and monitoring of a `Job` instances *command* will be done mostly by utilizing the `os/exec` package.
+The starting, stopping and monitoring of a `Job` instances command will be done mostly by utilizing the `os/exec` package.
 
-In order to track *command* status, start (`os/exec.Cmd.Start()`) will be called and a goroutine will be launched to wait (`os/exec.Cmd.Wait()`) for *command* completion and record exit status.
+In order to track command status, start (`os/exec.Cmd.Start()`) will be called and a goroutine will be launched to wait (`os/exec.Cmd.Wait()`) for command completion and record exit status.
 
 ##### Streaming Output
 
