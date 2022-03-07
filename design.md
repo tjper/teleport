@@ -263,6 +263,4 @@ Command:
 Usage:
   jobworker-cli [global flags] output [flags] job_id
 
-Flags:
-  --tail    tail output of job
 ```
