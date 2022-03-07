@@ -16,23 +16,20 @@ service JobWorkerService {
 // StartRequest specifies job details for JobWorkerService.Start.
 message StartRequest {
   // command is the arbitrary command to execute on JobWorkerService's host.
-  string command          = 1;
-  string memory           = 2;
-  float  cpus             = 3;
-  string device_write_bps = 4;
-  string device_read_bps  = 5;
-
+  string command  = 1;
+  // limits are the resource limits to enforce on the job.
+  Limits limits   = 2;
 }
 
 // StartResponse informs clients started job details.
 message StartResponse {
-  string job_id           = 1;
-  string command          = 2;
-  string status           = 3;
-  string memory           = 4;
-  float  cpus             = 5;
-  string device_write_bps = 6;
-  string device_read_bps  = 7;
+  string job_id  = 1;
+  // command is the arbitrary command that has been executed.
+  string command = 2;
+  // status is the human-readable current status of the job.
+  string status  = 3;
+  // limits are the resource limits being enforced on the job.
+  Limits limits  = 4;
 }
 
 // StopRequest specifies a job ID to stop for JobWorkerService.Stop.
@@ -68,4 +65,17 @@ message OutputRequest {
 message OutputResponse {
   // output is the job output.
   bytes output = 1;
+}
+
+message Limits {
+  // memory is the maximum amount of memory the job will use.
+  string memory           = 1;
+  // cpus is the maximum number of CPUs the job will use.
+  float  cpus             = 2;
+  // device_write_bps is the maximum number of bps (bytes per second) a device
+  // will write.
+  string device_write_bps = 3;
+  // device_read_bps is the maximum number of bps (bytes per second) a device
+  // will read.
+  string device_read_bps  = 4;
 }
