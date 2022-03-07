@@ -29,7 +29,7 @@ message StopRequest {
   string job_id = 1;
 }
 
-// StopResponse is a placeholder. This will to maintain backwards compatibility
+// StopResponse is a placeholder. This will maintain backwards compatibility
 // in the event response details exist in the future.
 message StopResponse {}
 
@@ -45,12 +45,15 @@ message StatusResponse {
   string status = 1;
 }
 
+// OutputRequest specifies job and process details for JobWorkerService.Output.
 message OutputRequest {
   string job_id = 1;
   // tail instructs JobWorkerService.Output to tail the job output.
   bool   tail   = 2;
 }
 
+// OutputResponse informs clients the output of a job. OutputResponse is part
+// of a rpc stream; job output will be received over multiple responses.
 message OutputResponse {
   // output is the job output.
   bytes output = 1;
