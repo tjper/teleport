@@ -66,14 +66,14 @@ message OutputResponse {
 }
 
 message Limits {
-  // memory is the maximum amount of memory the job will use.
-  string memory           = 1;
+  // memory is the maximum amount of memory the job will use in bytes.
+  uint64 memory           = 1;
   // cpus is the maximum number of CPUs the job will use.
   float  cpus             = 2;
-  // device_write_bps is the maximum number of bps (bytes per second) a device
-  // will write.
-  string device_write_bps = 3;
-  // device_read_bps is the maximum number of bps (bytes per second) a device
-  // will read.
-  string device_read_bps  = 4;
+  // disk_write_bps is the maximum number of bps (bytes per second) that may
+  // be written to disk.
+  uint64 disk_write_bps = 3;
+  // desk_read_bps is the maximum number of bps (bytes per second) that may
+  // be read form disk.
+  uint64 disk_read_bps  = 4;
 }

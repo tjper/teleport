@@ -52,10 +52,10 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error
 
 type Cgroup struct {
   ID             uuid.UUID
-  Memory         string
+  Memory         uint32
   Cpus           float32
-  DeviceWriteBps string
-  DeviceReadBps  string
+  DeviceWriteBps uint32
+  DeviceReadBps  uint32
 }
 
 type CgroupOption func(*Cgroup)
@@ -234,10 +234,10 @@ Usage:
   jobworker-cli [global flags] start [flags] command...
 
 Flags:
-  --memory           maximum amount of memory a job can use
+  --memory           maximum amount of memory a job can use in bytes
   --cpus             how much of the available CPU resources a job can use
-  --device-write-bps limit write rate (bytes per second) to a device
-  --device-read-bps  limit read rate (bytes per second) from a device
+  --disk-write-bps   limit write rate (bytes per second) to disk
+  --disk-read-bps    limit read rate (bytes per second) from disk
 
 ---
 
