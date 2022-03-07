@@ -4,10 +4,10 @@ This document outlines the design of the systems within this repo.
 
 ## Terms
 
-**jobworker**       Application responsible for managing the execution of arbitrary commands on the host Linux system.
-**command**         An arbitrary command started by the **jobworker**.
-**output**          The data typically written to stdout and stderr by a **command**.
-**log directory**   Location of **jobworker** **command** **output**, `/var/log/jobworker`.
+- **jobworker**: Application responsible for managing the execution of arbitrary commands on the host Linux system.
+- **command**: An arbitrary command started by the **jobworker**.
+- **output**: The data typically written to stdout and stderr by a **command**.
+- **log directory**: Location of **jobworker** **command** **output**, `/var/log/jobworker`.
 
 ## Critical Libraries
 
