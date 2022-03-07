@@ -92,7 +92,7 @@ In order to track command status, start (`os/exec.Cmd.Start()`) will be called a
 
 ##### Streaming Output
 
-Streaming output will involve reading a log file from `/var/log/jobworker` in chunks and writing it to the client until the client stops tailing the output.
+Streaming output will involve reading a log file from `/var/log/jobworker` in chunks and writing it to the client until EOF is reached. If the client uses the `--tail` flag, the output will be streamed until the client ends the stream.
 
 ##### JobStatus
 
