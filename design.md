@@ -4,7 +4,7 @@ This document outlines the design of the systems within this repo.
 
 ## Design Approach
 
-There's two main aspects to my approach I tried to maintain in each package.
+There's two main aspects to my approach I tried to maintain within each package.
 1. Have critical functionality hang off a `Service` type. This allows me to minimize global state, create a recognizable pattern for readers, and utilize interfaces if needed.
 2. Always take the simplest approach. It was made clear in the challenge description a high performing nor a scalable system was being asked for. Therefore, I designed components in a manner I know will not scale in order to keep things simple. More on this in [Performance Concerns](#performance-concerns).
 
@@ -21,17 +21,9 @@ TLS 1.3 will be used to ensure a secure cipher suite is utilized. As of Go 1.17,
 
 A set of certificates and secrets will exist in the `certs/` directory. All certificates will be signed by the included CA.
 
-- **user_alpha** will have permission to *mutate* and *query*
-- **user_bravo** will have permission to *query*
-
 ## Authorization
 
-Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. An internal map will specify which roles each user has, and will be used to determine if the request should be processed.
-
-All roles are specified below:
-- *mutate*: allows a job to be started or stopped
-- *query*: allows job status to be retrieved or job output to be streamed
-
+Once a client establishes a connection over TLS, the client certificate's `Common Name` will be used to determine which user has connected. A user will only be authorized to interact with jobs they started. All other jobs will be inaccessible to the user's client.
 
 ## Critical Libraries
 
@@ -59,13 +51,19 @@ func (s Service) RemoveCgroup(id uuid.UUID) error
 func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error
 
 type Cgroup struct {
-  ID uuid.UUID
+  ID             uuid.UUID
+  Memory         string
+  Cpus           float32
+  DeviceWriteBps string
+  DeviceReadBps  string
 }
 
 type CgroupOption func(*Cgroup)
 
-func WithMemoryHigh(high string) CgroupOption
-func WithCPUMax(max int) CgroupOption
+func WithMemory(limit string) CgroupOption
+func WithCPUs(cpus float32) CgroupOption
+func WithDeviceWriteBps(deviceLimit string) CgroupOption
+func WithDeviceReadBps(deviceLimit string) CgroupOption
 ...
 ```
 
@@ -112,7 +110,7 @@ type Service struct {
 }
 
 func (s Service) StartJob(job Job) error
-func (s Service) StopJob(jobID uuid.UUID) error
+func (s Service) StopJob(job Job) error
 func (s Service) FetchJob(jobID uuid.UUID) (*Job, error)
 
 type Job struct {
@@ -121,6 +119,7 @@ type Job struct {
   status  JobStatus
   output  io.ReadWriterCloser
 
+  user string
   cgroupID uuid.UUID
 
 // Locking mechanisms not included for brevity.
@@ -153,12 +152,41 @@ type JobWorker struct {
 func (jw JobWorker) Start(ctx context.Context, r *pb.StartRequest) (*pb.StartResponse, error)
 func (jw JobWorker) Stop(ctx context.Context, r *pb.StopRequest) (*pb.StopResponse, error)
 func (jw JobWorker) Status(ctx context.Context, r *pb.StartRequest) (*pb.StatusResponse, error)
-func (jw JobWorker) Output(ctx context.Context, r *pb.OutputRequest) (*pb.OutputResponse, error)
+func (jw JobWorker) Output(r *pb.OutputRequest, s pb.JobWokerService_OutputServer) error
 ```
 
 ## Performance Concerns
 
 If I was going to scale this application, the first component I would revisit is output streaming. In-memory streaming that backed up to disk at some threshold could be considered.
+
+## Testing
+
+I wanted to highlight the areas of the application that are critical to test thoroughly in order to ensure correct function. I will likely not test everything listed as 100% test coverage is not necessary for this challenge.
+
+#### Cgroups
+
+Cgroups have a number of sharp edges and nuances to them. Tests will ensure the following:
+- mounting/unmounting
+- setup/cleanup
+- Memory, cpus, and io controls are being applied and are reflected in process stats.
+
+#### Authorization
+
+Authorization tests will be fairly simple. They will ensure clients are only able to access jobs they own.
+
+#### Authentication
+
+Authentication tests will ensure the following:
+- Client must be using TLS 1.3.
+- Client certificate must be signed by the RootCA.
+- Client that does not authenticate is unable to connect.
+
+#### Jobs
+
+Job tests will ensure the following:
+- Job starting and supporting processes result in commands being processed and correct status tracking.
+- Logging setup and cleanup is being performed as expected.
+- Streaming output results are identical and correct across multiple concurrent clients.
 
 ## CLI
 
@@ -190,18 +218,10 @@ Usage:
   jobworker-cli [global flags] start [flags] command...
 
 Flags:
-  --memory-min
-  --memory-low
-  --memory-high
-  --memory-max
-  --cpu-weight
-  --cpu-max
-  --cpu-burst-max
-  --io-weight
-  --io-max-rbps
-  --io-max-wbps
-  --io-max-riops
-  --io-max-wiops
+  --memory           maximum amount of memory a job can use
+  --cpus             how much of the available CPU resources a job can use
+  --device-write-bps limit write rate (bytes per second) to a device
+  --device-read-bps  limit read rate (bytes per second) from a device
 
 ---
 
