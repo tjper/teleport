@@ -144,7 +144,6 @@ The `JobWorker` type will be responsible for the following.
 
 ```
 type JobWorker struct {
-  authService    auth.Service
   jobService     job.Service
   cgroupsService cgroups.Service
 }
