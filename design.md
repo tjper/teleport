@@ -120,6 +120,8 @@ type Job struct {
   status  JobStatus
   output  io.ReadWriterCloser
 
+  cgroupID uuid.UUID
+
 // Locking mechanisms not included for brevity.
 // ...
 }
