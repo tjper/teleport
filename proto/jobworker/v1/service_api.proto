@@ -65,6 +65,7 @@ message OutputResponse {
   bytes output = 1;
 }
 
+// Limits details resource limits. A value of 0 means undefined for all field.
 message Limits {
   // memory is the maximum amount of memory the job will use in bytes.
   uint64 memory           = 1;

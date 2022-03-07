@@ -52,10 +52,10 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error
 
 type Cgroup struct {
   ID             uuid.UUID
-  Memory         uint32
+  Memory         uint64
   Cpus           float32
-  DeviceWriteBps uint32
-  DeviceReadBps  uint32
+  DeviceWriteBps uint64
+  DeviceReadBps  uint64
 }
 
 type CgroupOption func(*Cgroup)
