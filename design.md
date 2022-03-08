@@ -191,8 +191,7 @@ type Job struct {
 // ...
 }
 
-func (j Job) Output() []byte
-func (j Job) StreamOutput(ctx context.Context) (<-chan byte, error)
+func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error
 ```
 ---
 
