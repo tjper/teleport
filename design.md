@@ -174,6 +174,7 @@ Step 6 specifies how to handle `io.EOF`, and I don't really like the approach of
 ```
 type Service struct {
   ID            uuid.UUID
+  cgroupsService cgroups.Service
 }
 
 func (s Service) StartJob(job Job) error
@@ -203,15 +204,14 @@ Package grpc will provide a `JobWorker` type that implements the gRPC server stu
 
 The `JobWorker` type will be responsible for the following.
 - Ensuring all requests have the necessary permissions to be carried out.
-- Utilize `job.Service` and `cgroups.Service` in coordination to satisfy requests.
 - Validate request inputs.
+- Utilize `job.Service` to satisfy requests.
 
 #### Types
 
 ```
 type JobWorker struct {
   jobService     job.Service
-  cgroupsService cgroups.Service
 }
 
 func (jw JobWorker) Start(ctx context.Context, r *pb.StartRequest) (*pb.StartResponse, error)
