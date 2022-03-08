@@ -84,13 +84,56 @@ The `Job` type will be responsible for the following.
 - Ensure thread safe access to attributes where necessary.
 - Ensure status reflects command state.
 
-##### Start, Stop, and Status
+##### Terms
+- **parent**: jobworker application servicing gRPC requests
+- **child**: jobworker application that has been executed by the **parent** in order to create a third process within the correct cgroup.
+- **grandchild**: arbitrary command being run on host Linux system.
 
-The starting, stopping and monitoring of a `Job` instances command will be done mostly by utilizing the `os/exec` package.
+##### Starting
 
-In order to track command status, start (`os/exec.Cmd.Start()`) will be called and a goroutine will be launched to wait (`os/exec.Cmd.Wait()`) for command completion and record exit status.
+The starting of a `Job` will involve the following:
+1. The **parent** process receives a request to start a command.
+2. Two pipes are created for communication from the **parent** to the **child**.
+  1. pipe for sending job details
+  2. pipe for signaling when the **child** has been placed in a cgroup by the **parent**
+3. The **parent** starts a goroutine and writes job details (including the command) on pipe 1.
+4. Both pipes are passed to **child** process as `ExtraFiles` in the `os/exec Cmd`.
+5. The **child** process is started with `os/exec Cmd.Start()`, executing `jobworker exec`.
+6. The **parent** creates a cgroup.
+7. The **parent** places the **child** in the cgroup created in step 6.
+8. The **parent** signals to **child** that it has been placed in a cgroup by closing pipe 2.
+9. The **parent** starts a goroutine calling `os/exec Cmd.Wait()`, waiting for the **child** to return in order to track `Job` status.
+10. Send started job details back to client.
 
-In order to stop a command, the following will be done. `os/exec CommandContext()` will be used to create command. A context cancellation function that may be used to cancel the command will be stored within the `Job`. Any process desiring to cancel a Job may execute that context cancellation function.
+The **child** process executing `jobworker exec` will involve the following:
+1. Application starts, and the following file descriptors are opened:
+  - `/proc/self/fd/3` for the job details
+  - `/proc/self/fd/4` for the cgroup placement signaling
+2. Job details are read from from `/proc/self/fd/3` and used to create `os/exec Cmd` for the **grandchild** process.
+3. **child** waits for **parent** to signal that it has been placed in the correct cgroup on `/proc/self/fd/4`.
+4. **child** calls `os/exec Cmd.Start()` to start **grandchild**.
+5. **child** calls `os/exec Cmd.Wait()` to wait for **grandchild** to exit.
+6. **child** returns **grandchild's** exit code as its own.
+
+##### Stopping
+
+In order to stop a command, the following will be done:
+1. When the **parent** creates the **child** `os/exec Cmd` the **child** will have its own`pgid`.
+2. When the **child** creates the **grandchild** `os/exec Cmd` the `pgid` will be in the same `pgid` as the **child**.
+3. When the **parent** creates the **child** `os/exec Cmd` a context cancellation function will be stored as part of the `Job`. Any process seeking to stop a `Job` may call the cancellation function. This will kill both the **child** and **grandchild**.
+4. The Cgroup related to `Job` will also be removed in unrelated logic.
+
+##### Status
+
+The status of underlying **grandchild** will be returned through the **child** to **parent** as exitcodes. This status will be handling in step 9 of [Starting](#starting).
+
+###### JobStatus
+
+The JobStatus type indicates the status of a job. The status will be one of the following:
+
+- *running*: Job has been started and is currently running.
+- *stopped*: Job has been forcibly stopped by jobworker.
+- *exited*: Job has exited. (with exit code)
 
 ##### Streaming Output
 
@@ -99,22 +142,13 @@ Streaming output will involve reading a log file from `/var/log/jobworker` in ch
 ###### Implementation
 
 When an output stream is requested, the following will occur:
-  - `Job` will be fetched by `job.Service`
-  - `Job.OutputStream` will be called in its own goroutine and accept `context.Context` and `chan<- byte` arguments.
-  - `Job.OutputStream` will open the log file, and defer closing the fd.
-  - `Job.OutputStream` will start a goroutine listening on `<-ctx.Done()`.
-  - `Job.OutputStream` will read from log file, in chunks.
-  - If the `context.Context` is cancelled, `job.OutputStream` will close the `io.ReaderCloser`, close the `chan<- byte`, and return.
-  - Meanwhile, `grpc.Service.Output()` is streaming these log chunks to a client.
-
-
-##### JobStatus
-
-The JobStatus type indicates the status of a job. The status will be one of the following:
-
-- *running*: Job has been started and is currently running.
-- *stopped*: Job has been forcibly stopped by jobworker.
-- *exited*: Job has exited (will include exit code).
+- `Job` will be fetched by `job.Service`
+- `Job.OutputStream` will be called in its own goroutine and accept `context.Context` and `chan<- byte` arguments.
+- `Job.OutputStream` will open the log file, and defer closing the fd.
+- `Job.OutputStream` will start a goroutine listening on `<-ctx.Done()`.
+- `Job.OutputStream` will read from log file, in chunks.
+- If the `context.Context` is cancelled, `job.OutputStream` will close the `io.ReaderCloser`, close the `chan<- byte`, and return.
+- Meanwhile, `grpc.Service.Output()` is streaming these log chunks to a client.
 
 #### Types
 
@@ -202,6 +236,7 @@ Job tests will ensure the following:
 - logging setup/cleanup
 - logging setup when `/var/log/jobworker` already exists
 - job starting and supporting processes result in commands being processed and correct status tracking
+- job stopping properly kills all related processes
 - streaming output results are identical and correct across multiple concurrent clients
 
 ## CLI
