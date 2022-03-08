@@ -61,7 +61,7 @@ message OutputRequest {
 // OutputResponse informs clients the output of a job. OutputResponse is part
 // of a rpc stream; job output will be received over multiple responses.
 message OutputResponse {
-  // output is the job output.
+  // output is the job stdout and stderr output.
   bytes output = 1;
 }
 
