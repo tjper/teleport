@@ -8,7 +8,6 @@ There's two main aspects to my approach I tried to maintain within each package.
 1. Have critical functionality hang off a `Service` type. This allows me to minimize global state, create a recognizable pattern for readers, and utilize interfaces if needed.
 2. Always take the simplest approach. It was made clear in the challenge description a high performing nor a scalable system was being asked for. Therefore, I designed components in a manner I know will not scale in order to keep things simple. More on this in [Performance Concerns](#performance-concerns).
 
-
 ## API
 
 Click [here](https://github.com/tjper/teleport/blob/design/proto/jobworker/v1/service_api.proto) for API definition.
@@ -20,6 +19,14 @@ Client and server will utilize mTLS.
 TLS 1.3 will be used to ensure a secure cipher suite is utilized. As of Go 1.17, the cipher suites are ordered by `crypto/tls` based on range of factors. https://go.dev/blog/tls-cipher-suites
 
 A set of certificates and secrets will exist in the `certs/` directory. All certificates will be signed by the included CA.
+
+Certificates and PKs are configured as follows:
+- Each RSA private key is 2048 bits.
+- CA signed certificates expires in 30 days.
+- Server certificate has CN "localhost".
+- Each client certificate has one of the following CNs:
+  - alpha_user
+  - bravo_user
 
 ## Authorization
 
