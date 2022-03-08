@@ -266,7 +266,7 @@ Command:
  `jobworker-cli start` Start a job. Job details are returned.
 
 Usage:
-  jobworker-cli [global flags] start [flags] command...
+  jobworker-cli [global flags] start [flags] command [args...]
 
 Flags:
   --memory           maximum amount of memory a job can use in bytes

@@ -15,7 +15,8 @@ service JobWorkerService {
 
 // StartRequest specifies job details for JobWorkerService.Start.
 message StartRequest {
-  // command is the arbitrary command to execute on JobWorkerService's host.
+  // command is the arbitrary command and its arguments to execute on
+  // JobWorkerService's host.
   string command  = 1;
   // limits are the resource limits to enforce on the job.
   Limits limits   = 2;
@@ -24,7 +25,7 @@ message StartRequest {
 // StartResponse informs clients started job details.
 message StartResponse {
   string job_id  = 1;
-  // command is the arbitrary command that has been executed.
+  // command is the arbitrary command and its arguments that has been executed.
   string command = 2;
   // status is Status of the started job.
   StatusDetail status  = 3;
