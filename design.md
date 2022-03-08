@@ -45,6 +45,11 @@ The `Service` type will be responsible for the following:
 - updating cgroup controllers
 - placing a process into a cgroup
 
+The following cgroup interface files will be used.
+- cpu.max
+- memory.high
+- io.max
+
 #### Types
 
 ```
