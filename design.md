@@ -66,16 +66,16 @@ type Cgroup struct {
   ID             uuid.UUID
   Memory         uint64
   Cpus           float32
-  DeviceWriteBps uint64
-  DeviceReadBps  uint64
+  DiskWriteBps uint64
+  DiskReadBps  uint64
 }
 
 type CgroupOption func(*Cgroup)
 
-func WithMemory(limit string) CgroupOption
+func WithMemory(limit uint64) CgroupOption
 func WithCPUs(cpus float32) CgroupOption
-func WithDeviceWriteBps(deviceLimit string) CgroupOption
-func WithDeviceReadBps(deviceLimit string) CgroupOption
+func WithDiskWriteBps(limit uint64) CgroupOption
+func WithDiskReadBps(limit uint64) CgroupOption
 ...
 ```
 
