@@ -23,7 +23,7 @@ A set of certificates and secrets will exist in the `certs/` directory. All cert
 Certificates and PKs are configured as follows:
 - Each RSA private key is 2048 bits.
 - CA signed certificates expires in 30 days.
-- Server certificate has CN "localhost".
+- Server certificate has domain "localhost" and CN "jobworker".
 - Each client certificate has one of the following CNs:
   - alpha_user
   - bravo_user
