@@ -149,7 +149,9 @@ The JobStatus type indicates the status of a job. The status will be one of the 
 
 ##### Streaming Output
 
-Streaming output will involve reading a log file from `/var/log/jobworker` in chunks and writing it to the client until the client ends the stream.
+The **grandchild** process will be writing its stdout and stderr to a log file in `/var/log/jobworker`.
+
+Streaming output will involve reading this log file from `/var/log/jobworker` in chunks and writing it to the client until the client ends the stream or the job is no longer running.
 
 ###### Implementation
 
@@ -159,7 +161,7 @@ When an output stream is requested, the following will occur:
 3. `Job.OutputStream` will open the log file, and defer closing the fd.
 4. `Job.OutputStream` will start a goroutine listening on `<-ctx.Done()`.
 5. `Job.OutputStream` will read from log file, in chunks.
-6. When `Read` returns `io.EOF`, the process will sleep for a second and continue reading. See [Streaming Tradoffs](#streaming-tradeoffs) below.
+6. When `Read` returns `io.EOF`, the process checks if the job status is `running`. If not, return; otherwise, sleep for a second and read. See [Streaming Tradoffs](#streaming-tradeoffs) below.
 7. If the `context.Context` is cancelled, `job.OutputStream` will close the `io.ReaderCloser`, close the `chan<- byte`, and return.
 8. Meanwhile, `grpc.Service.Output()` is streaming these log chunks to a client.
 
