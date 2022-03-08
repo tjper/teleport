@@ -15,9 +15,8 @@ service JobWorkerService {
 
 // StartRequest specifies job details for JobWorkerService.Start.
 message StartRequest {
-  // command is the arbitrary command and its arguments to execute on
-  // JobWorkerService's host.
-  string command  = 1;
+  // command is the arbitrary command to be execute on JobWorkerService's host.
+  Command command  = 1;
   // limits are the resource limits to enforce on the job.
   Limits limits   = 2;
 }
@@ -25,8 +24,8 @@ message StartRequest {
 // StartResponse informs clients started job details.
 message StartResponse {
   string job_id  = 1;
-  // command is the arbitrary command and its arguments that has been executed.
-  string command = 2;
+  // command is the arbitrary command that has been executed.
+  Command command = 2;
   // status is Status of the started job.
   StatusDetail status  = 3;
   // limits are the resource limits being enforced on the job.
@@ -64,6 +63,14 @@ message OutputRequest {
 message OutputResponse {
   // output is the job output.
   bytes output = 1;
+}
+
+// Command details a shell command.
+message Command {
+  // name is the Command's leading name.
+  string name = 1;
+  // args are the Command's arguments.
+  repeated string args = 2;
 }
 
 // Limits details resource limits. A value of 0 means undefined for all field.
