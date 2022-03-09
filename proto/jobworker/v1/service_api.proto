@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package jobworker.v1;
+
+option go_package = "github.com/tjper/teleport/proto/jobworker/v1";
+
+// JobWorkerService provides methods that allow clients to start and interact
+// with arbitrary commands running on the service's host.
+service JobWorkerService {
+  rpc Start(StartRequest) returns (StartResponse){}
+  rpc Stop(StopRequest) returns (StopResponse){}
+  rpc Status(StatusRequest) returns (StatusResponse){}
+  rpc Output(OutputRequest) returns (stream OutputResponse){}
+}
+
+// StartRequest specifies job details for JobWorkerService.Start.
+message StartRequest {
+  // command is the arbitrary command to be execute on JobWorkerService's host.
+  Command command  = 1;
+  // limits are the resource limits to enforce on the job.
+  Limits limits   = 2;
+}
+
+// StartResponse informs clients started job details.
+message StartResponse {
+  string job_id  = 1;
+  // command is the arbitrary command that has been executed.
+  Command command = 2;
+  // status is Status of the started job.
+  StatusDetail status  = 3;
+  // limits are the resource limits being enforced on the job.
+  Limits limits  = 4;
+}
+
+// StopRequest specifies a job ID to stop for JobWorkerService.Stop.
+message StopRequest {
+  string job_id = 1;
+}
+
+// StopResponse is a placeholder. This will maintain backwards compatibility
+// in the event response details exist in the future.
+message StopResponse {}
+
+// StatusRequest specifies a job ID to perform a status check on for
+// JobworkerService.Status.
+message StatusRequest {
+  string job_id = 1;
+}
+
+// StatusResponse informs clients the status of a job.
+message StatusResponse {
+  // status is current state of the request job.
+  StatusDetail status = 1;
+}
+
+// OutputRequest specifies job and process details for JobWorkerService.Output.
+message OutputRequest {
+  string job_id = 1;
+}
+
+// OutputResponse informs clients the output of a job. OutputResponse is part
+// of a rpc stream; job output will be received over multiple responses.
+message OutputResponse {
+  // output is the job stdout and stderr output.
+  bytes output = 1;
+}
+
+// Command details a shell command.
+message Command {
+  // name is the Command's leading name.
+  string name = 1;
+  // args are the Command's arguments.
+  repeated string args = 2;
+}
+
+// Limits details resource limits. A value of 0 means undefined for all field.
+message Limits {
+  // memory is the maximum amount of memory the job will use in bytes.
+  uint64 memory           = 1;
+  // cpus is the maximum number of CPUs the job will use.
+  float  cpus             = 2;
+  // disk_write_bps is the maximum number of bps (bytes per second) that may
+  // be written to disk.
+  uint64 disk_write_bps = 3;
+  // desk_read_bps is the maximum number of bps (bytes per second) that may
+  // be read form disk.
+  uint64 disk_read_bps  = 4;
+}
+
+// StatusDetail provide details on the status of a job.
+message StatusDetail {
+  // status
+  Status status    = 1;
+  // exit_code is only populated when status == STATUS_EXITED.
+  uint32 exit_code = 2;
+}
+
+// Status is the various states a job may be in.
+enum Status {
+  // STATUS_UNSPECIFIED job status is unknown.
+  STATUS_UNSPECIFIED = 0;
+  // STATUS_RUNNING job is running.
+  STATUS_RUNNING     = 1;
+  // STATUS_STOPPED job has been stopped by JobWorkerService.
+  STATUS_STOPPED     = 2;
+  // STATUS_EXITED job has exited.
+  STATUS_EXITED      = 3;
+}
