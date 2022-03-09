@@ -161,13 +161,9 @@ When an output stream is requested, the following will occur:
 3. `Job.OutputStream` will open the log file, and defer closing the fd.
 4. `Job.OutputStream` will start a goroutine listening on `<-ctx.Done()`.
 5. `Job.OutputStream` will read from log file, in chunks.
-6. When `Read` returns `io.EOF`, the process checks if the job status is `running`. If not, return; otherwise, sleep for a second and read. See [Streaming Tradoffs](#streaming-tradeoffs) below.
+6. When `Read` returns `io.EOF`, the process checks if the job status is `running`. If not, return; otherwise, the process will begin listen to a channel downstream of a filewatcher. This filewatcher will be monitoring the `Job`'s log file and notify the process when it may resume. See [Streaming Tradoffs](#streaming-tradeoffs) below.
 7. If the `context.Context` is cancelled, `job.OutputStream` will close the `io.ReaderCloser`, close the `chan<- byte`, and return.
 8. Meanwhile, `grpc.Service.Output()` is streaming these log chunks to a client.
-
-###### Streaming Tradeoffs
-
-Step 6 specifies how to handle `io.EOF`, and I don't really like the approach of polling the file to see if more data is available. However, I don't want to invest effort in setting up a filewatcher for this challenge if it's not necessary.
 
 #### Types
 
