@@ -62,7 +62,7 @@ func TestCleanupWithCgroups(t *testing.T) {
 
 func TestCleanupWithPids(t *testing.T) {
 	if !isRoot() {
-		t.Skipf("must be root to run %v", t.Name())
+		t.Skip("must be root to run")
 	}
 
 	service, err := NewService()
@@ -91,6 +91,34 @@ func TestCleanupWithPids(t *testing.T) {
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
+		return
+	}
+}
+
+func TestCreateCgroup(t *testing.T) {
+	if !isRoot() {
+		t.Skip("must be root to run")
+	}
+
+	service, err := NewService()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		if err := service.Cleanup(); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	cgroup, err := service.CreateCgroup()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if _, err := os.Stat(cgroup.path()); err != nil {
+		t.Errorf("expected cgroup to exist; path: %s", cgroup.path())
 		return
 	}
 }
