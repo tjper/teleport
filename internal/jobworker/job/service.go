@@ -2,7 +2,11 @@
 // arbitrary commands running on the host system.
 package job
 
-import "github.com/google/uuid"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 // NewService creates a new Service intance.
 func NewService() *Service {
@@ -13,14 +17,14 @@ func NewService() *Service {
 type Service struct {
 }
 
-func (s Service) StartJob(job Job) error {
+func (s Service) StartJob(ctx context.Context, job Job) error {
 	return nil
 }
 
-func (s Service) StopJob(job Job) error {
+func (s Service) StopJob(ctx context.Context, job Job) error {
 	return nil
 }
 
-func (s Service) FetchJob(id uuid.UUID) (*Job, error) {
+func (s Service) FetchJob(ctx context.Context, id uuid.UUID) (*Job, error) {
 	return nil, nil
 }
