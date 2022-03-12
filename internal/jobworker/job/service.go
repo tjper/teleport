@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	ierrors "github.com/tjper/teleport/internal/errors"
+	"github.com/tjper/teleport/internal/jobworker/cgroups"
 	"github.com/tjper/teleport/internal/log"
 
 	"github.com/google/uuid"
@@ -28,10 +29,18 @@ var (
 	ErrJobNotFound = errors.New("job not found")
 )
 
+// ICgroupService specifies Service interactions with cgroups.
+type ICgroupService interface {
+	CreateCgroup(...cgroups.CgroupOption) (*cgroups.Cgroup, error)
+	PlaceInCgroup(cgroups.Cgroup, int) error
+	RemoveCgroup(uuid.UUID) error
+}
+
 // NewService creates a new Service intance.
-func NewService() *Service {
+func NewService(cgroups ICgroupService) *Service {
 	return &Service{
-		jobs: new(sync.Map),
+		jobs:    new(sync.Map),
+		cgroups: cgroups,
 	}
 }
 
@@ -39,23 +48,31 @@ func NewService() *Service {
 type Service struct {
 	// TODO: elaborate why I'm using sync map
 	// TODO: ensure jobs map and job types are staying aligned
-	jobs *sync.Map
+	jobs    *sync.Map
+	cgroups ICgroupService
 }
 
 // StartJob starts the job.
-func (s *Service) StartJob(_ context.Context, job Job) error {
-	// TODO: reevaluate order of StartJob
-	if err := job.start(); err != nil {
-		return ierrors.Wrap(err)
-	}
-
+func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.CgroupOption) error {
 	if _, ok := s.jobs.Load(job.ID); ok {
 		return fmt.Errorf("%w; job: %v", ErrJobAlreadyStarted, job.ID)
 	}
-
 	s.jobs.Store(job.ID, &job)
 
+	cgroup, err := s.cgroups.CreateCgroup(options...)
+	if err != nil {
+		return ierrors.Wrap(err)
+	}
+
+	if err := job.start(); err != nil {
+		return ierrors.Wrap(err)
+	}
 	go func() {
+		defer func() {
+			if err := job.cleanup(); err != nil {
+				logger.Errorf("job cleanup; job: %v, err: %v", job.ID, err)
+			}
+		}()
 		// Goroutine terminates when job is no running. This can occur because the
 		// the job executable exits or is terminated. To cleanup all jobs see
 		// Service.Cleanup.
@@ -64,7 +81,22 @@ func (s *Service) StartJob(_ context.Context, job Job) error {
 		if err := job.wait(); err != nil {
 			logger.Errorf("%v; job: %v", err, job.ID)
 		}
+
+		if err := s.cgroups.RemoveCgroup(cgroup.ID); err != nil {
+			logger.Errorf("%v; job: %v, cgroup: %v", err, job.ID, cgroup.ID)
+		}
 	}()
+
+	// Place Job executable's process within Cgroup.
+	if err := s.cgroups.PlaceInCgroup(*cgroup, job.pid()); err != nil {
+		job.cancel()
+		return ierrors.Wrap(err)
+	}
+
+	if err := job.signalContinue(); err != nil {
+		job.cancel()
+		return ierrors.Wrap(err)
+	}
 
 	return nil
 }

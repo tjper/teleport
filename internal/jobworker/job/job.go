@@ -92,9 +92,9 @@ func (j Job) Status() Status {
 	return j.status
 }
 
-// Close releases all resources tied to the Job. Close should be called once
-// the Job is no longer being used.
-func (j Job) Close() error {
+// cleanup releases all resources tied to the Job. cleanup should be called
+// once the Job is no longer being used.
+func (j Job) cleanup() error {
 	j.cancel()
 
 	// TODO: Ensure this works as expected, maybe create an error chain type
@@ -150,6 +150,16 @@ func (j Job) wait() error {
 	}
 
 	return nil
+}
+
+// signalContinue instructs the Job's executable to continue.
+func (j Job) signalContinue() error {
+	return errors.Wrap(j.continueIn.Close())
+}
+
+// pid retrieves the Job's executable's pid.
+func (j Job) pid() int {
+	return j.exec.Process.Pid
 }
 
 func (j *Job) setStatus(s Status) {
