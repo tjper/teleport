@@ -9,6 +9,9 @@ import (
 	"github.com/tjper/teleport/internal/errors"
 )
 
+// TODO: determine if cgroup v1 and cgroup v2 must be supported. Current
+// approach assumes cgroup v2 is being used.
+
 func newMemoryController(cgroup Cgroup, limit uint64) controller {
 	return controller{
 		name:   "memory",
