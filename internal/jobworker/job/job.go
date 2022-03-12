@@ -97,6 +97,8 @@ func (j Job) Status() Status {
 func (j Job) Close() error {
 	j.cancel()
 
+	// TODO: Ensure this works as expected, maybe create an error chain type
+	// and test.
 	var gerr error
 	check := func(err error) {
 		if gerr == nil {
