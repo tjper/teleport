@@ -2,42 +2,172 @@ package job
 
 import (
 	"context"
+	"io"
+	"os"
+	"os/exec"
 	"sync"
+
+	"github.com/tjper/teleport/internal/errors"
+
+	"github.com/google/uuid"
 )
 
 // NewJob creates a new Job instance.
 func NewJob(
-	userID string,
+	owner string,
 	cmd Command,
-) *Job {
-	return &Job{
-		mutex:  new(sync.RWMutex),
-		userID: userID,
-		cmd:    cmd,
+) (*Job, error) {
+	cmdOut, cmdIn, err := os.Pipe()
+	if err != nil {
+		return nil, errors.Wrap(err)
 	}
+
+	continueOut, continueIn, err := os.Pipe()
+	if err != nil {
+		return nil, errors.Wrap(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	executable := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
+	executable.SysProcAttr.Setpgid = true
+	executable.ExtraFiles = []*os.File{
+		cmdOut,
+		continueOut,
+	}
+
+	return &Job{
+		mutex:       new(sync.RWMutex),
+		ID:          uuid.New(),
+		owner:       owner,
+		cmd:         cmd,
+		status:      Pending,
+		exitCode:    -1,
+		exec:        executable,
+		cmdIn:       cmdIn,
+		cmdOut:      cmdOut,
+		continueIn:  continueIn,
+		continueOut: continueOut,
+		cancel:      cancel,
+	}, nil
 }
 
 // Job represents a single arbitrary command and its related entities
 // (output, status, etc.).
 type Job struct {
-	// TODO: replace general Job mutex with field specific mutexs to mitigate
+	// TODO: replace general Job mutex with field specific mutexes to mitigate
 	// unnecessary lock contention.
 	mutex *sync.RWMutex
 
+	ID     uuid.UUID
 	cmd    Command
 	status Status
-	userID string
+	// exitCode defaults to -1, indicating the job has not exited.
+	exitCode int
+	owner    string
+
+	exec                    *exec.Cmd
+	cmdIn, cmdOut           io.WriteCloser
+	continueIn, continueOut io.WriteCloser
+	cancel                  context.CancelFunc
 }
 
-// StreamOutput streams Job's output to the passed stream channel.
+// StreamOutput streams Job's output to the passed stream channel. StreamOutput
+// will return if either of the following circumstances occur:
+//
+// 1) The ctx is cancelled.
+// 2) The Job is no longer running and the end of the output is reached.
 func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
+
 	return nil
+}
+
+// Owner retrieves the Job owner.
+func (j Job) Owner() string { return j.owner }
+
+// Status retrieves the Job status.
+func (j Job) Status() Status {
+	j.mutex.RLock()
+	defer j.mutex.RUnlock()
+	return j.status
+}
+
+// Close releases all resources tied to the Job. Close should be called once
+// the Job is no longer being used.
+func (j Job) Close() error {
+	j.cancel()
+
+	var gerr error
+	check := func(err error) {
+		if gerr == nil {
+			gerr = errors.Wrap(err)
+		}
+	}
+
+	check(j.cmdIn.Close())
+	check(j.cmdOut.Close())
+	check(j.continueIn.Close())
+	check(j.continueOut.Close())
+	if gerr != nil {
+		return gerr
+	}
+
+	return nil
+}
+
+// start launches the Job.
+func (j Job) start() error {
+	if err := j.exec.Start(); err != nil {
+		return errors.Wrap(err)
+	}
+
+	j.setStatus(Running)
+
+	return nil
+}
+
+// stop terminates the Job.
+func (j Job) stop() {
+	j.cancel()
+}
+
+// wait blocks until the Job has exited.
+func (j Job) wait() error {
+	if err := j.exec.Wait(); err != nil {
+		return errors.Wrap(err)
+	}
+
+	// Determine nature of process exit.
+	switch code := j.exec.ProcessState.ExitCode(); code {
+	// If job exit code is -1, process was terminated by a signal.
+	case -1:
+		j.setStatus(Stopped)
+	default:
+		j.setStatus(Exited)
+		j.setExitCode(code)
+	}
+
+	return nil
+}
+
+func (j *Job) setStatus(s Status) {
+	j.mutex.Lock()
+	j.status = s
+	j.mutex.Unlock()
+}
+
+func (j *Job) setExitCode(code int) {
+	j.mutex.Lock()
+	j.exitCode = code
+	j.mutex.Unlock()
 }
 
 // Status represents the possible statuses of a Job.
 type Status string
 
 const (
+	// Pending indicates the job has been initialized but has not yet started.
+	Pending Status = "pending"
 	// Running indicates the job is currently running.
 	Running Status = "running"
 	// Stopped indicates the job has been manually terminated.
