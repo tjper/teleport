@@ -123,6 +123,54 @@ func TestCreateCgroup(t *testing.T) {
 	}
 }
 
+func TestPlaceInCgroup(t *testing.T) {
+	if !isRoot() {
+		t.Skip("must be root to run")
+	}
+
+	service, err := NewService()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		if err := service.Cleanup(); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	cgroup, err := service.CreateCgroup()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := service.PlaceInCgroup(*cgroup, cmd.Process.Pid); err != nil {
+		t.Error(err)
+		return
+	}
+
+	pids, err := cgroup.readPids()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if len(pids) != 1 {
+		t.Errorf("unexpected pids; actual: %v, expected: %v", pids, cmd.Process.Pid)
+		return
+	}
+	if pids[0] != cmd.Process.Pid {
+		t.Errorf("unexpected pid; actual: %v, expected: %v", pids[0], cmd.Process.Pid)
+		return
+	}
+}
+
 func isRoot() bool {
 	return os.Getegid() == 0
 }
