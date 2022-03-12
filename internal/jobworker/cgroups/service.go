@@ -1,4 +1,4 @@
-// TODO: create descriptior of cgroups package
+// Package cgroups provides types for interaction with Linux cgroups v2.
 package cgroups
 
 import (
@@ -33,20 +33,20 @@ func NewService() (*Service, error) {
 	return s, nil
 }
 
-// Service facilitates cgroup interactions.
+// Service facilitates cgroup interactions. Service currently only supports
+// cgroups v2.
 type Service struct {
 	path string
 }
 
 // CreateCgroup creates a new Service Cgroup. CgroupOptions may be specified to
 // configure the Cgroup. On success, the created Cgroup is returned to the
-// caller. On error,
+// caller.
 func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 	cgroup := &Cgroup{
 		ID:      uuid.New(),
 		service: s,
 	}
-
 	for _, option := range options {
 		option(cgroup)
 	}
@@ -72,7 +72,7 @@ func (s Service) RemoveCgroup(id uuid.UUID) error {
 }
 
 // Cleanup removes all jobworker Service resources. Whenever a Service instance
-//is used, Cleanup should always be called before application close.
+// is used, Cleanup should always be called before application close.
 func (s Service) Cleanup() error {
 	if err := s.cleanup(); err != nil {
 		return err

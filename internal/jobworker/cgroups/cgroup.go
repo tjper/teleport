@@ -1,4 +1,3 @@
-// TODO: doc
 package cgroups
 
 import (
