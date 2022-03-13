@@ -74,6 +74,9 @@ type Job struct {
 	exitCode int
 	owner    string
 
+	// context.Context is usually utilized at the function level. However, here
+	// is being used to coordinate the cancelling of all asyncrounous Job
+	// resources.
 	ctx    context.Context
 	cancel context.CancelFunc
 
