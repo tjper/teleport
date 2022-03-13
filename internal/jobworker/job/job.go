@@ -46,16 +46,17 @@ func NewJob(
 	return &Job{
 		mutex:       new(sync.RWMutex),
 		ID:          id,
-		owner:       owner,
 		cmd:         cmd,
 		status:      Pending,
 		exitCode:    noExit,
+		owner:       owner,
+		ctx:         ctx,
+		cancel:      cancel,
 		exec:        executable,
 		cmdIn:       cmdIn,
 		cmdOut:      cmdOut,
 		continueIn:  continueIn,
 		continueOut: continueOut,
-		cancel:      cancel,
 		watcher:     *watcher,
 	}, nil
 }
@@ -67,17 +68,18 @@ type Job struct {
 	// mitigate unnecessary lock contention.
 	mutex *sync.RWMutex
 
-	ID     uuid.UUID
-	cmd    Command
-	status Status
-	// exitCode defaults to noExit, indicating the job has not exited.
+	ID       uuid.UUID
+	cmd      Command
+	status   Status
 	exitCode int
 	owner    string
+
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	exec                    *exec.Cmd
 	cmdIn, cmdOut           io.WriteCloser
 	continueIn, continueOut io.WriteCloser
-	cancel                  context.CancelFunc
 	watcher                 watch.ModWatcher
 }
 
@@ -170,6 +172,16 @@ func (j Job) start() error {
 	if err := j.exec.Start(); err != nil {
 		return ierrors.Wrap(err)
 	}
+
+	// Launch job output watcher in a separate goroutine. If Watch returns
+	// anything other than context.Canceled, terminate the job, as the output
+	// is not being watched.
+	go func() {
+		err := j.watcher.Watch(j.ctx, tick)
+		if !errors.Is(err, context.Canceled) {
+			j.cancel()
+		}
+	}()
 
 	j.setStatus(Running)
 
