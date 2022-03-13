@@ -2,12 +2,16 @@ package job
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
-	"github.com/tjper/teleport/internal/errors"
+	ierrors "github.com/tjper/teleport/internal/errors"
+	"github.com/tjper/teleport/internal/jobworker/log"
+	"github.com/tjper/teleport/internal/jobworker/watch"
 
 	"github.com/google/uuid"
 )
@@ -19,12 +23,12 @@ func NewJob(
 ) (*Job, error) {
 	cmdOut, cmdIn, err := os.Pipe()
 	if err != nil {
-		return nil, errors.Wrap(err)
+		return nil, ierrors.Wrap(err)
 	}
 
 	continueOut, continueIn, err := os.Pipe()
 	if err != nil {
-		return nil, errors.Wrap(err)
+		return nil, ierrors.Wrap(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -36,33 +40,37 @@ func NewJob(
 		continueOut,
 	}
 
+	id := uuid.New()
+	watcher := watch.NewModWatcher(log.File(id))
+
 	return &Job{
 		mutex:       new(sync.RWMutex),
-		ID:          uuid.New(),
+		ID:          id,
 		owner:       owner,
 		cmd:         cmd,
 		status:      Pending,
-		exitCode:    -1,
+		exitCode:    noExit,
 		exec:        executable,
 		cmdIn:       cmdIn,
 		cmdOut:      cmdOut,
 		continueIn:  continueIn,
 		continueOut: continueOut,
 		cancel:      cancel,
+		watcher:     *watcher,
 	}, nil
 }
 
 // Job represents a single arbitrary command and its related entities
 // (output, status, etc.).
 type Job struct {
-	// TODO: replace general Job mutex with field specific mutexes to mitigate
-	// unnecessary lock contention.
+	// TODO: Consider replacing general Job mutex with field specific mutexes to
+	// mitigate unnecessary lock contention.
 	mutex *sync.RWMutex
 
 	ID     uuid.UUID
 	cmd    Command
 	status Status
-	// exitCode defaults to -1, indicating the job has not exited.
+	// exitCode defaults to noExit, indicating the job has not exited.
 	exitCode int
 	owner    string
 
@@ -70,6 +78,7 @@ type Job struct {
 	cmdIn, cmdOut           io.WriteCloser
 	continueIn, continueOut io.WriteCloser
 	cancel                  context.CancelFunc
+	watcher                 watch.ModWatcher
 }
 
 // StreamOutput streams Job's output to the passed stream channel. StreamOutput
@@ -78,8 +87,47 @@ type Job struct {
 // 1) The ctx is cancelled.
 // 2) The Job is no longer running and the end of the output is reached.
 func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	return nil
+	fd, err := os.Open(log.File(j.ID))
+	if err != nil {
+		return ierrors.Wrap(err)
+	}
+	go func() {
+		<-ctx.Done()
+		fd.Close()
+	}()
+
+	b := make([]byte, readBufferSize)
+	for {
+		n, err := fd.Read(b)
+		// If any bytes were read at all, write to stream.
+		if n > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case stream <- b[:n]:
+			}
+		}
+		// If context has been cancelled return to caller.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ctx.Err()
+		}
+		// If EOF and job is running, wait for output from job.
+		if errors.Is(err, io.EOF) && j.Status() == Running {
+			if err := j.waitUntilOutput(ctx); err != nil {
+				return ierrors.Wrap(err)
+			}
+		}
+		/// If EOF and job is not running, return.
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return ierrors.Wrap(err)
+		}
+	}
 }
 
 // Owner retrieves the Job owner.
@@ -102,7 +150,7 @@ func (j Job) cleanup() error {
 	var gerr error
 	check := func(err error) {
 		if gerr == nil {
-			gerr = errors.Wrap(err)
+			gerr = ierrors.Wrap(err)
 		}
 	}
 
@@ -120,7 +168,7 @@ func (j Job) cleanup() error {
 // start launches the Job.
 func (j Job) start() error {
 	if err := j.exec.Start(); err != nil {
-		return errors.Wrap(err)
+		return ierrors.Wrap(err)
 	}
 
 	j.setStatus(Running)
@@ -136,13 +184,13 @@ func (j Job) stop() {
 // wait blocks until the Job has exited.
 func (j Job) wait() error {
 	if err := j.exec.Wait(); err != nil {
-		return errors.Wrap(err)
+		return ierrors.Wrap(err)
 	}
 
 	// Determine nature of process exit.
 	switch code := j.exec.ProcessState.ExitCode(); code {
 	// If job exit code is -1, process was terminated by a signal.
-	case -1:
+	case noExit:
 		j.setStatus(Stopped)
 	default:
 		j.setStatus(Exited)
@@ -154,7 +202,16 @@ func (j Job) wait() error {
 
 // signalContinue instructs the Job's executable to continue.
 func (j Job) signalContinue() error {
-	return errors.Wrap(j.continueIn.Close())
+	return ierrors.Wrap(j.continueIn.Close())
+}
+
+// waitUntilOutput blocks until the Job watcher indicates the Job output has
+// been modified.
+func (j Job) waitUntilOutput(ctx context.Context) error {
+	if err := j.watcher.WaitUntil(ctx); err != nil {
+		return ierrors.Wrap(err)
+	}
+	return nil
 }
 
 // pid retrieves the Job's executable's pid.
@@ -195,3 +252,15 @@ type Command struct {
 	// Args are the arguments of the command.
 	Args []string
 }
+
+const (
+	// noExit is the default process exit code. It indicates a process has not
+	// exited, or it was terminated by a signal.
+	noExit = -1
+
+	// tick is the default modification watcher interval.
+	tick = time.Second
+
+	// readBufferSize is the default buffer size for streaming a job's output.
+	readBufferSize = 512
+)
