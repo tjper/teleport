@@ -1,3 +1,5 @@
+// Package reexec provides an API for launching arbitrary commands in a 
+// jobworker child process.
 package reexec
 
 import (
