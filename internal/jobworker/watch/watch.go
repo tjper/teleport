@@ -47,7 +47,7 @@ func (w *ModWatcher) Watch(ctx context.Context, tick time.Duration) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ierrors.Wrap(ctx.Err())
+			return ctx.Err()
 		case <-ticker.C:
 			info, err := os.Stat(w.path)
 			if errors.Is(err, fs.ErrNotExist) {

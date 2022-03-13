@@ -68,14 +68,14 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.Cgroup
 		return ierrors.Wrap(err)
 	}
 	go func() {
+		// Goroutine terminates when job is stopped or exits. This can occur
+		// because the job executable exits or is terminated. To cleanup all jobs
+		// see Service.Cleanup.
 		defer func() {
 			if err := job.cleanup(); err != nil {
 				logger.Errorf("job cleanup; job: %v, err: %v", job.ID, err)
 			}
 		}()
-		// Goroutine terminates when job is no running. This can occur because the
-		// the job executable exits or is terminated. To cleanup all jobs see
-		// Service.Cleanup.
 		// TODO: Consider adding context termination, so OS is not being depended
 		// on for termination.
 		if err := job.wait(); err != nil {
