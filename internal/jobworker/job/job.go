@@ -10,7 +10,7 @@ import (
 	"time"
 
 	ierrors "github.com/tjper/teleport/internal/errors"
-	"github.com/tjper/teleport/internal/jobworker/log"
+	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/jobworker/watch"
 
 	"github.com/google/uuid"
@@ -41,7 +41,7 @@ func NewJob(
 	}
 
 	id := uuid.New()
-	watcher := watch.NewModWatcher(log.File(id))
+	watcher := watch.NewModWatcher(output.File(id))
 
 	return &Job{
 		mutex:       new(sync.RWMutex),
@@ -95,7 +95,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	fd, err := os.Open(log.File(j.ID))
+	fd, err := os.Open(output.File(j.ID))
 	if err != nil {
 		return ierrors.Wrap(err)
 	}
