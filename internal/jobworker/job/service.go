@@ -11,7 +11,9 @@ import (
 
 	ierrors "github.com/tjper/teleport/internal/errors"
 	"github.com/tjper/teleport/internal/jobworker/cgroups"
+	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/log"
+	"golang.org/x/sys/unix"
 
 	"github.com/google/uuid"
 )
@@ -20,6 +22,10 @@ import (
 var logger = log.New(os.Stdout, "job")
 
 var (
+	// ErrServiceClosing indicates a StartJob call was made while the Service
+	// was closing down.
+	ErrServiceClosing = errors.New("service closing")
+
 	// ErrJobAlreadyStarted indicates Service attempted to start a Job that had
 	// already started. Highly unlikely for different Job instances as UUIDs are
 	// used as identifiers.
@@ -37,15 +43,24 @@ type ICgroupService interface {
 }
 
 // NewService creates a new Service intance.
-func NewService(cgroups ICgroupService) *Service {
+func NewService(cgroups ICgroupService) (*Service, error) {
+	if err := os.MkdirAll(output.Root, output.FileMode); err != nil {
+		return nil, ierrors.Wrap(err)
+	}
+
 	return &Service{
+		mutex:   new(sync.RWMutex),
+		healthy: true,
 		jobs:    new(sync.Map),
 		cgroups: cgroups,
-	}
+	}, nil
 }
 
 // Service facilitates job interactions.
 type Service struct {
+	mutex *sync.RWMutex
+	// healthy indicates if Service is accepting to jobs to start.
+	healthy bool
 	// TODO: elaborate why I'm using sync map
 	// TODO: ensure jobs map and job types are staying aligned
 	jobs    *sync.Map
@@ -54,6 +69,10 @@ type Service struct {
 
 // StartJob starts the job.
 func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.CgroupOption) error {
+	if !s.isHealthy() {
+		return fmt.Errorf("service unhealthy; err: %w", ErrServiceClosing)
+	}
+
 	if _, ok := s.jobs.Load(job.ID); ok {
 		return fmt.Errorf("%w; job: %v", ErrJobAlreadyStarted, job.ID)
 	}
@@ -76,8 +95,7 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.Cgroup
 				logger.Errorf("job cleanup; job: %v, err: %v", job.ID, err)
 			}
 		}()
-		// TODO: Consider adding context termination, so OS is not being depended
-		// on for termination.
+
 		if err := job.wait(); err != nil {
 			logger.Errorf("%v; job: %v", err, job.ID)
 		}
@@ -118,9 +136,13 @@ func (s Service) FetchJob(_ context.Context, id uuid.UUID) (*Job, error) {
 	return s.loadJob(id)
 }
 
-// Cleanup releases all Service resources. Cleanup should always be called when
+// Close releases all Service resources. Close should always be called when
 // job.Service is no longer being used.
-func (s Service) Cleanup() {
+func (s *Service) Close() error {
+	s.mutex.Lock()
+	s.healthy = false
+	s.mutex.Unlock()
+
 	s.jobs.Range(func(key, value interface{}) bool {
 		i, ok := s.jobs.Load(key)
 		if !ok {
@@ -135,6 +157,12 @@ func (s Service) Cleanup() {
 		job.stop()
 		return true
 	})
+
+	if err := unix.Rmdir(output.Root); err != nil {
+		return ierrors.Wrap(err)
+	}
+
+	return nil
 }
 
 func (s Service) loadJob(id uuid.UUID) (*Job, error) {
@@ -149,4 +177,10 @@ func (s Service) loadJob(id uuid.UUID) (*Job, error) {
 	}
 
 	return job, nil
+}
+
+func (s Service) isHealthy() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.healthy
 }
