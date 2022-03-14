@@ -7,6 +7,8 @@ import (
 
 func toStatus(s job.Status) pb.Status {
 	switch s {
+	case job.Pending:
+		return pb.Status_STATUS_PENDING
 	case job.Running:
 		return pb.Status_STATUS_RUNNING
 	case job.Stopped:
