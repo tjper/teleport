@@ -1,10 +1,13 @@
 package cgroup
 
 import (
+	"bufio"
 	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
+	"reflect"
 	"testing"
 )
 
@@ -21,6 +24,20 @@ func TestCleanup(t *testing.T) {
 
 	if _, err := os.Stat(service.path); err != nil {
 		t.Error(err)
+	}
+
+	expected := []string{
+		cpuController,
+		ioController,
+		memoryController,
+	}
+	controllers, err := readControllers(service.path)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !reflect.DeepEqual(controllers, expected) {
+		t.Errorf("unexpected controllers; actual: %v, expected: %v", controllers, expected)
 	}
 
 	if err := service.Cleanup(); err != nil {
@@ -169,6 +186,27 @@ func TestPlaceInCgroup(t *testing.T) {
 		t.Errorf("unexpected pid; actual: %v, expected: %v", pids[0], cmd.Process.Pid)
 		return
 	}
+}
+
+func readControllers(dir string) ([]string, error) {
+	fd, err := os.Open(path.Join(dir, cgroupSubtreeControl))
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+
+	scanner := bufio.NewScanner(fd)
+	scanner.Split(bufio.ScanWords)
+
+	var controllers []string
+	for scanner.Scan() {
+		controllers = append(controllers, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return controllers, nil
 }
 
 func isRoot() bool {
