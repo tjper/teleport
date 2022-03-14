@@ -91,12 +91,13 @@ type Job struct {
 	watcher                 watch.ModWatcher
 }
 
-// StreamOutput streams Job's output to the passed stream channel. StreamOutput
-// will return if either of the following circumstances occur:
+// StreamOutput streams Job's output to the passed stream channel in chunks of 
+// size chunkSize. StreamOutput will return if either of the following 
+// circumstances occur:
 //
 // 1) The ctx is cancelled.
 // 2) The Job is no longer running and the end of the output is reached.
-func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
+func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -111,7 +112,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
 		// FIXME: handle fd.Close error
 	}()
 
-	b := make([]byte, readBufferSize)
+	b := make([]byte, chunkSize)
 	for {
 		n, err := fd.Read(b)
 		// If any bytes were read at all, write to stream.
@@ -296,7 +297,4 @@ const (
 
 	// tick is the default modification watcher interval.
 	tick = time.Second
-
-	// readBufferSize is the default buffer size for streaming a job's output.
-	readBufferSize = 512
 )
