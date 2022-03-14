@@ -77,7 +77,46 @@ func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 		return nil, status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
 	}
 
-	id, err := uuid.Parse(req.JobId)
+	j, err := jw.fetchJob(ctx, req.JobId)
+	if err != nil {
+		return nil, err
+	}
+
+	if j.Status() != job.Running {
+		return nil, status.Error(codes.FailedPrecondition, "job is not running")
+	}
+
+	if err := jw.jobSvc.StopJob(ctx, j.ID); err != nil {
+		return nil, status.Error(codes.Internal, "stop job")
+	}
+
+	return &pb.StopResponse{}, nil
+}
+
+func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
+	if req.JobId != "" {
+		return nil, status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
+	}
+
+	j, err := jw.fetchJob(ctx, req.JobId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.StatusResponse{
+		Status: &pb.StatusDetail{
+			Status:   toStatus(j.Status()),
+			ExitCode: uint32(j.ExitCode()),
+		},
+	}, nil
+}
+
+func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_OutputServer) error {
+	return status.Error(codes.Unimplemented, "unimplemented")
+}
+
+func (jw JobWorker) fetchJob(ctx context.Context, jobID string) (*job.Job, error) {
+	id, err := uuid.Parse(jobID)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, validator.Format("job ID not UUID"))
 	}
@@ -95,21 +134,5 @@ func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 		return nil, status.Error(codes.PermissionDenied, "incorrect owner")
 	}
 
-	if j.Status() != job.Running {
-		return nil, status.Error(codes.FailedPrecondition, "job is not running")
-	}
-
-	if err := jw.jobSvc.StopJob(ctx, j.ID); err != nil {
-		return nil, status.Error(codes.Internal, "stop job")
-	}
-
-	return new(pb.StopResponse), nil
-}
-
-func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "unimplemented")
-}
-
-func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_OutputServer) error {
-	return status.Error(codes.Unimplemented, "unimplemented")
+	return j, nil
 }
