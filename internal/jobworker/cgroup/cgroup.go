@@ -2,7 +2,6 @@ package cgroup
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -71,20 +70,20 @@ func (c Cgroup) create() error {
 		set = append(set, newMemoryController(c, c.Memory))
 	}
 	if c.Cpus > 0 {
-		set = append(set, newCpusController(c, c.Cpus))
+		set = append(set, newCPUController(c, c.Cpus))
 	}
 	if c.DiskWriteBps > 0 {
-		set = append(set, newIOController(c, fmt.Sprintf("8:16 wbps=%d", c.DiskWriteBps)))
+		set = append(set, newDiskWriteBps(c, c.DiskWriteBps))
 	}
 	if c.DiskReadBps > 0 {
-		set = append(set, newIOController(c, fmt.Sprintf("8:16 rbps=%d", c.DiskReadBps)))
+		set = append(set, newDiskReadBps(c, c.DiskReadBps))
 	}
 
 	for _, controller := range set {
 		if err := controller.enable(); err != nil {
 			return errors.Wrap(err)
 		}
-		if err := controller.create(); err != nil {
+		if err := controller.apply(); err != nil {
 			return errors.Wrap(err)
 		}
 	}

@@ -27,9 +27,9 @@ func TestCleanup(t *testing.T) {
 	}
 
 	expected := []string{
-		cpuController,
-		ioController,
-		memoryController,
+		cpu,
+		io,
+		memory,
 	}
 	controllers, err := readControllers(service.path)
 	if err != nil {
@@ -122,21 +122,35 @@ func TestCreateCgroup(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer func() {
-		if err := service.Cleanup(); err != nil {
-			t.Error(err)
-		}
-	}()
+	// defer func() {
+	// 	if err := service.Cleanup(); err != nil {
+	// 		t.Error(err)
+	// 	}
+	// }()
 
-	cgroup, err := service.CreateCgroup()
-	if err != nil {
-		t.Error(err)
-		return
+	tests := map[string]struct {
+		options []CgroupOption
+	}{
+		// "no options":              {},
+		// "w/ memory limit":         {options: []CgroupOption{WithMemory(1000000000)}},
+		// "w/ cpu limit":            {options: []CgroupOption{WithCpus(1.5)}},
+		"w/ disk write bps limit": {options: []CgroupOption{WithDiskWriteBps(100000)}},
+		"w/ disk read bps limit":  {options: []CgroupOption{WithDiskReadBps(100000)}},
 	}
 
-	if _, err := os.Stat(cgroup.path()); err != nil {
-		t.Errorf("expected cgroup to exist; path: %s", cgroup.path())
-		return
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cgroup, err := service.CreateCgroup(test.options...)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+
+			if _, err := os.Stat(cgroup.path()); err != nil {
+				t.Errorf("expected cgroup to exist; path: %s", cgroup.path())
+				return
+			}
+		})
 	}
 }
 

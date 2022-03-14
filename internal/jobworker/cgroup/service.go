@@ -32,9 +32,9 @@ func NewService() (*Service, error) {
 	}
 
 	controllers := []string{
-		cpuController,
-		memoryController,
-		ioController,
+		cpu,
+		memory,
+		io,
 	}
 	if err := s.enableControllers(mountPath, controllers); err != nil {
 		return nil, err
