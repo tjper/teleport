@@ -1,4 +1,4 @@
-// Package reexec provides an API for launching arbitrary commands in a 
+// Package reexec provides an API for launching arbitrary commands in a
 // jobworker child process.
 package reexec
 
@@ -132,8 +132,8 @@ func exitCode(err error) int {
 	return CommandFailure
 }
 
-// waitForContinue waits for EOF to be received from fd. The parent process 
-// will close fd when this process may continue. 
+// waitForContinue waits for EOF to be received from fd. The parent process
+// will close fd when this process may continue.
 func waitForContinue(ctx context.Context, fd io.ReadCloser) error {
 	go func() {
 		<-ctx.Done()

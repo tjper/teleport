@@ -18,8 +18,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// NewJob creates a new Job instance.
-func NewJob(
+// New creates a new Job instance.
+func New(
 	owner string,
 	cmd reexec.Command,
 ) (*Job, error) {
@@ -49,10 +49,10 @@ func NewJob(
 	return &Job{
 		mutex:       new(sync.RWMutex),
 		ID:          id,
+		Owner:       owner,
 		cmd:         cmd,
 		status:      Pending,
 		exitCode:    noExit,
-		owner:       owner,
 		ctx:         ctx,
 		cancel:      cancel,
 		exec:        executable,
@@ -71,15 +71,17 @@ type Job struct {
 	// mitigate unnecessary lock contention.
 	mutex *sync.RWMutex
 
-	ID       uuid.UUID
+	// ID is a unique identifier.
+	ID uuid.UUID
+	// Owner is the user responsible for Job instance creation.
+	Owner string
+
 	cmd      reexec.Command
 	status   Status
 	exitCode int
-	owner    string
 
 	// context.Context is usually utilized at the function level. However, here
-	// it is being used to coordinate the cancelling of all asyncrounous Job
-	// resources.
+	// it is being used to coordinate the cancelling of all async Job resources.
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -105,8 +107,8 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
 	go func() {
 		<-ctx.Done()
 		fd.Close()
-    // FIXME: does closing the file return a EOF error?
-    // FIXME: handle fd.Close error
+		// FIXME: does closing the file return a EOF error?
+		// FIXME: handle fd.Close error
 	}()
 
 	b := make([]byte, readBufferSize)
@@ -140,9 +142,6 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
 	}
 }
 
-// Owner retrieves the Job owner.
-func (j Job) Owner() string { return j.owner }
-
 // Status retrieves the Job status.
 func (j Job) Status() Status {
 	j.mutex.RLock()
@@ -150,29 +149,30 @@ func (j Job) Status() Status {
 	return j.status
 }
 
+// ExitCode retrieves the Job exit code.
+func (j Job) ExitCode() int {
+	j.mutex.RLock()
+	defer j.mutex.RUnlock()
+	return j.exitCode
+}
+
 // cleanup releases all resources tied to the Job. cleanup should be called
 // once the Job is no longer being used.
-func (j Job) cleanup() error {
+func (j Job) cleanup() {
 	j.cancel()
 
-	// TODO: Ensure this works as expected, maybe create an error chain type
-	// and test.
-	var gerr error
-	check := func(err error) {
-		if gerr == nil {
-			gerr = ierrors.Wrap(err)
+	closers := []io.Closer{
+		j.cmdIn,
+		j.cmdOut,
+		j.continueIn,
+		j.continueOut,
+	}
+
+	for _, closer := range closers {
+		if err := closer.Close(); err != nil {
+			logger.Warnf("closing; error: %v", err)
 		}
 	}
-
-	check(j.cmdIn.Close())
-	check(j.cmdOut.Close())
-	check(j.continueIn.Close())
-	check(j.continueOut.Close())
-	if gerr != nil {
-		return gerr
-	}
-
-	return nil
 }
 
 // start launches the Job.

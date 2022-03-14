@@ -158,7 +158,7 @@ func (jw JobWorker) fetchJob(ctx context.Context, jobID string) (*job.Job, error
 	}
 
 	// TODO: retrieve owner from auth context
-	if j.Owner() != "owner" {
+	if j.Owner != "owner" {
 		return nil, status.Error(codes.PermissionDenied, "incorrect owner")
 	}
 
