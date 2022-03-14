@@ -10,11 +10,12 @@ const (
 	// Root is the default jobworker log output root directory.
 	Root = "/var/log/jobworker"
 	// FileMode is the default FileMode for log output resources.
+  // FIXME: what is correct file mode?
 	FileMode = 0466
 )
 
 // File returns the standard jobworker log file location based on the passed
 // id.
 func File(id fmt.Stringer) string {
-	return path.Join(Root, id.String())
+	return path.Join(Root, fmt.Sprintf("%s.log", id.String()))
 }

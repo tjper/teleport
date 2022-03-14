@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	ierrors "github.com/tjper/teleport/internal/errors"
 	"github.com/tjper/teleport/internal/jobworker/output"
+	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/jobworker/watch"
 
 	"github.com/google/uuid"
@@ -19,7 +21,7 @@ import (
 // NewJob creates a new Job instance.
 func NewJob(
 	owner string,
-	cmd Command,
+	cmd reexec.Command,
 ) (*Job, error) {
 	cmdOut, cmdIn, err := os.Pipe()
 	if err != nil {
@@ -33,7 +35,8 @@ func NewJob(
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	executable := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
+	// TODO: use constants
+	executable := exec.CommandContext(ctx, "jobworker", "reexec")
 	executable.SysProcAttr.Setpgid = true
 	executable.ExtraFiles = []*os.File{
 		cmdOut,
@@ -69,13 +72,13 @@ type Job struct {
 	mutex *sync.RWMutex
 
 	ID       uuid.UUID
-	cmd      Command
+	cmd      reexec.Command
 	status   Status
 	exitCode int
 	owner    string
 
 	// context.Context is usually utilized at the function level. However, here
-	// is being used to coordinate the cancelling of all asyncrounous Job
+	// it is being used to coordinate the cancelling of all asyncrounous Job
 	// resources.
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -102,6 +105,8 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte) error {
 	go func() {
 		<-ctx.Done()
 		fd.Close()
+    // FIXME: does closing the file return a EOF error?
+    // FIXME: handle fd.Close error
 	}()
 
 	b := make([]byte, readBufferSize)
@@ -186,6 +191,30 @@ func (j Job) start() error {
 		}
 	}()
 
+	// Write job details to cmdIn pipe. Child process will read and launch
+	// grandchild process.
+	go func() {
+		defer func() {
+			if err := j.cmdIn.Close(); err != nil {
+				logger.Errorf("closing command pipe; err: %s", err)
+			}
+		}()
+
+		reexecJob := reexec.Job{
+			ID:  j.ID,
+			Cmd: j.cmd,
+		}
+		b, err := json.Marshal(reexecJob)
+		if err != nil {
+			j.cancel()
+			return
+		}
+		if _, err := j.cmdIn.Write(b); err != nil {
+			j.cancel()
+			return
+		}
+	}()
+
 	j.setStatus(Running)
 
 	return nil
@@ -259,14 +288,6 @@ const (
 	// Exited indicates the job exited and returned an exit code.
 	Exited Status = "exited"
 )
-
-// Command represents a shell command.
-type Command struct {
-	// Name is the leading name of the command.
-	Name string
-	// Args are the arguments of the command.
-	Args []string
-}
 
 const (
 	// noExit is the default process exit code. It indicates a process has not

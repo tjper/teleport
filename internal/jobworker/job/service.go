@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// logger is an object for logging package event to stdout.
+// logger is an object for logging package events to stdout.
 var logger = log.New(os.Stdout, "job")
 
 var (
