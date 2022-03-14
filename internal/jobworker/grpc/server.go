@@ -3,8 +3,10 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/tjper/teleport/internal/jobworker/job"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/log"
@@ -36,13 +38,13 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 	// TODO: ensure nil req.Command.Args are not being referenced.
 	valid := validator.New()
 	valid.AssertFunc(func() bool { return req.Command != nil }, "command empty")
-	valid.AssertFunc(func() bool { return req.Command.Name != "" }, "command name empty")
+	valid.Assert(req.Command.Name != "", "command name empty")
 	valid.AssertFunc(func() bool { return req.Limits != nil }, "limits empty")
 	if err := valid.Err(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	job, err := job.New(
+	j, err := job.New(
 		"owner",
 		reexec.Command{
 			Name: req.GetCommand().Name,
@@ -54,24 +56,54 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		return nil, status.Error(codes.Internal, "build job")
 	}
 
-	if err := jw.jobSvc.StartJob(ctx, *job); err != nil {
+	if err := jw.jobSvc.StartJob(ctx, *j); err != nil {
 		logger.Errorf("starting job; error: %s", err)
 		return nil, status.Errorf(codes.Internal, "start job")
 	}
 
 	return &pb.StartResponse{
-		JobId:   job.ID.String(),
+		JobId:   j.ID.String(),
 		Command: req.Command,
 		Status: &pb.StatusDetail{
-			Status:   toStatus(job.Status()),
-			ExitCode: uint32(job.ExitCode()),
+			Status:   toStatus(j.Status()),
+			ExitCode: uint32(j.ExitCode()),
 		},
 		Limits: req.Limits,
 	}, nil
 }
 
 func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "unimplemented")
+	if req.JobId != "" {
+		return nil, status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
+	}
+
+	id, err := uuid.Parse(req.JobId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, validator.Format("job ID not UUID"))
+	}
+
+	j, err := jw.jobSvc.FetchJob(ctx, id)
+	if errors.Is(err, job.ErrJobNotFound) {
+		return nil, status.Error(codes.NotFound, "unknown job ID")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "fetch job")
+	}
+
+	// TODO: retrieve owner from auth context
+	if j.Owner() != "owner" {
+		return nil, status.Error(codes.PermissionDenied, "incorrect owner")
+	}
+
+	if j.Status() != job.Running {
+		return nil, status.Error(codes.FailedPrecondition, "job is not running")
+	}
+
+	if err := jw.jobSvc.StopJob(ctx, j.ID); err != nil {
+		return nil, status.Error(codes.Internal, "stop job")
+	}
+
+	return new(pb.StopResponse), nil
 }
 
 func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
