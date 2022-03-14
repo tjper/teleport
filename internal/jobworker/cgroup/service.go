@@ -1,5 +1,5 @@
-// Package cgroups provides types for interaction with Linux cgroups v2.
-package cgroups
+// Package cgroup provides types for interaction with Linux cgroups v2.
+package cgroup
 
 import (
 	"io/fs"
