@@ -112,7 +112,35 @@ func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.Stat
 }
 
 func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_OutputServer) error {
-	return status.Error(codes.Unimplemented, "unimplemented")
+	if req.JobId != "" {
+		return status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
+	}
+
+	j, err := jw.fetchJob(stream.Context(), req.JobId)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+
+	// TODO: to buffer or not to buffer (buffer)
+	outputc := make(chan []byte)
+	go func() {
+		if err := j.StreamOutput(ctx, outputc); err != nil {
+			logger.Errorf("streaming output from job; error: %s", err)
+		}
+		close(outputc)
+	}()
+
+	for b := range outputc {
+		if err := stream.Send(&pb.OutputResponse{Output: b}); err != nil {
+			logger.Errorf("streaming output to client; error: %s", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (jw JobWorker) fetchJob(ctx context.Context, jobID string) (*job.Job, error) {
