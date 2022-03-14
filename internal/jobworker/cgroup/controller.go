@@ -76,4 +76,10 @@ const (
 	// controllersSubtreeControl is the name of the file that contains all
 	// enabled controllers within a cgroup.
 	cgroupSubtreeControl = "cgroup.subtree_control"
+	// cpuController is the cgroup2 cpu controller name.
+	cpuController = "cpu"
+	// memoryController is the cgroup2 memory controller name.
+	memoryController = "memory"
+	// ioController is the cgroup2 io controller name.
+	ioController = "io"
 )

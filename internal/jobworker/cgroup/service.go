@@ -2,6 +2,7 @@
 package cgroup
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -27,6 +28,18 @@ func NewService() (*Service, error) {
 	}
 
 	if err := s.mount(); err != nil {
+		return nil, err
+	}
+
+	controllers := []string{
+		cpuController,
+		memoryController,
+		ioController,
+	}
+	if err := s.enableControllers(mountPath, controllers); err != nil {
+		return nil, err
+	}
+	if err := s.enableControllers(s.path, controllers); err != nil {
 		return nil, err
 	}
 
@@ -133,6 +146,24 @@ mount:
 	// create jobworker base directory for jobworker cgroups.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
 		return errors.Wrap(err)
+	}
+
+	return nil
+}
+
+// enableControllers enables the passed controllers for the cgroup path passed.
+func (s Service) enableControllers(dir string, controllers []string) error {
+	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+	defer fd.Close()
+
+	for _, controller := range controllers {
+		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
+		if err != nil {
+			return errors.Wrap(err)
+		}
 	}
 
 	return nil
