@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// runServe initialzes and configures a gprc.JobWorker instance to serve
+// authenticated clients.
 func runServe(ctx context.Context) int {
 	switch {
 	case len(*keyFlag) == 0:
@@ -63,12 +65,14 @@ func runServe(ctx context.Context) int {
 		return ecTLSConfig
 	}
 
+	// Register grpc.JobWorker instance as gRPC server.
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	pb.RegisterJobWorkerServiceServer(srv, jw)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Listen for SIGINT and SIGTERM to stop gRPC server.
 	stopc := make(chan os.Signal, 1)
 	signal.Notify(stopc, unix.SIGINT, unix.SIGTERM)
 	go func() {

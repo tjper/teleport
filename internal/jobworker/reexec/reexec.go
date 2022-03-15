@@ -46,8 +46,12 @@ const (
 	CommandFailure = 100
 )
 
+// Job is a Job passed by the parent to be executed by the child.
 type Job struct {
-	ID  uuid.UUID
+	// ID is a unique identifier for the Job. The parent and child share the
+	// Job ID for each unique Job.
+	ID uuid.UUID
+	// Cmd is the arbitrary command to run as part of this Job.
 	Cmd Command
 }
 
