@@ -36,10 +36,7 @@ func NewService() (*Service, error) {
 		memory,
 		io,
 	}
-	if err := s.enableControllers(mountPath, controllers); err != nil {
-		return nil, err
-	}
-	if err := s.enableControllers(s.path, controllers); err != nil {
+	if err := s.enableControllers(controllers); err != nil {
 		return nil, err
 	}
 
@@ -153,24 +150,6 @@ mount:
 	return nil
 }
 
-// enableControllers enables the passed controllers for the cgroup path passed.
-func (s Service) enableControllers(dir string, controllers []string) error {
-	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	defer fd.Close()
-
-	for _, controller := range controllers {
-		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
-		if err != nil {
-			return errors.WithStack(err)
-		}
-	}
-
-	return nil
-}
-
 // cleanup walks the Service base directory, moving all jobworker pids into the
 // root cgroup and removing the each cgroup directory.
 func (s Service) cleanup() error {
@@ -227,6 +206,36 @@ func (s Service) cleanup() error {
 // unmount unmounts the cgroup2 filesystem.
 func (s Service) unmount() error {
 	return errors.WithStack(unix.Unmount(mountPath, 0))
+}
+
+// enableControllers enables the passed controllers for the root and jobworker
+// cgroup.
+func (s Service) enableControllers(controllers []string) error {
+	if err := enableControllers(mountPath, controllers); err != nil {
+		return err
+	}
+	if err := enableControllers(s.path, controllers); err != nil {
+		return err
+	}
+	return nil
+}
+
+// enableControllers enables the passed controllers for the cgroup path passed.
+func enableControllers(dir string, controllers []string) error {
+	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	defer fd.Close()
+
+	for _, controller := range controllers {
+		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	return nil
 }
 
 const (
