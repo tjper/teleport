@@ -1,4 +1,5 @@
-package grpc
+// Package user provides an API for interaction with jobworker users.
+package user
 
 import (
 	"context"
@@ -7,9 +8,12 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-// userFromContext extracts the user from the passed context if it exists. The
+// Service provides mechanisms for interacting with users.
+type Service struct{}
+
+// User extracts the user from the passed context if it exists. The
 // ok return value indicates if the user has been found on the context.
-func userFromContext(ctx context.Context) (user string, ok bool) {
+func (s Service) User(ctx context.Context) (user string, ok bool) {
 	peer, ok := peer.FromContext(ctx)
 	if !ok {
 		return "", false

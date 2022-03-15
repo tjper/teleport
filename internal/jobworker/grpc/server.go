@@ -6,13 +6,13 @@ import (
 	"errors"
 	"os"
 
-	"github.com/google/uuid"
 	"github.com/tjper/teleport/internal/jobworker/job"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/log"
 	"github.com/tjper/teleport/internal/validator"
 	pb "github.com/tjper/teleport/proto/gen/go/jobworker/v1"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -27,15 +27,24 @@ func NewJobWorker(jobSvc *job.Service) *JobWorker {
 
 var _ pb.JobWorkerServiceServer = (*JobWorker)(nil)
 
+// IUserService provides an API for interacting with jobworker users.
+type IUserService interface {
+	// User retrieves the user associated with the ctx. The ok return value
+	// should indicate if the user could be retrieved. The user return value
+	// should be the user's unique identifer.
+	User(ctx context.Context) (string, bool)
+}
+
 // Jobworker provides mechanisms for starting, stopping, fetching status, and
 // output streaming jobs.
 // Jobworker implements pb.JobWorkerServiceServer.
 type JobWorker struct {
-	jobSvc *job.Service
+	jobSvc  *job.Service
+	userSvc IUserService
 }
 
 func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResponse, error) {
-	user, ok := userFromContext(ctx)
+	user, ok := jw.userSvc.User(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
@@ -78,7 +87,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 }
 
 func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResponse, error) {
-	user, ok := userFromContext(ctx)
+	user, ok := jw.userSvc.User(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
@@ -105,7 +114,7 @@ func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 }
 
 func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
-	user, ok := userFromContext(ctx)
+	user, ok := jw.userSvc.User(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
@@ -128,7 +137,7 @@ func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.Stat
 }
 
 func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_OutputServer) error {
-	user, ok := userFromContext(stream.Context())
+	user, ok := jw.userSvc.User(stream.Context())
 	if !ok {
 		return status.Error(codes.Unauthenticated, "unauthenticated")
 	}
@@ -148,7 +157,7 @@ func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_Out
 	// TODO: to buffer or not to buffer (buffer)
 	outputc := make(chan []byte, streamBuffer)
 	go func() {
-		if err := j.StreamOutput(ctx, outputc); err != nil {
+		if err := j.StreamOutput(ctx, outputc, chunkSize); err != nil {
 			logger.Errorf("streaming output from job; job: %s, error: %v", j.ID, err)
 		}
 		close(outputc)
@@ -189,10 +198,10 @@ func (jw JobWorker) fetchJob(ctx context.Context, user string, jobID string) (*j
 }
 
 const (
-  // streamBuffer is the default stream buffer size. This is the number of
-  // chunks that may be held in memory.
-  streamBuffer = 16
+	// streamBuffer is the default stream buffer size. This is the number of
+	// chunks that may be held in memory.
+	streamBuffer = 16
 
-  // chunkSize is the size in bytes of each chunk to stream.
-  chunkSize = 128
+	// chunkSize is the size in bytes of each chunk to stream.
+	chunkSize = 128
 )
