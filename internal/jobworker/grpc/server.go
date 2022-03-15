@@ -21,8 +21,8 @@ import (
 var logger = log.New(os.Stdout, "grpc")
 
 // NewJobWorker creates a JobWorker instance.
-func NewJobWorker(jobSvc *job.Service) *JobWorker {
-	return &JobWorker{jobSvc: jobSvc}
+func NewJobWorker(jobSvc *job.Service, userSvc IUserService) *JobWorker {
+	return &JobWorker{jobSvc: jobSvc, userSvc: userSvc}
 }
 
 var _ pb.JobWorkerServiceServer = (*JobWorker)(nil)

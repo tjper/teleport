@@ -10,8 +10,8 @@ const (
 	// Root is the default jobworker log output root directory.
 	Root = "/var/log/jobworker"
 	// FileMode is the default FileMode for log output resources.
-  // FIXME: what is correct file mode?
-	FileMode = 0466
+	// FIXME: what is correct file mode?
+	FileMode = 0666
 )
 
 // File returns the standard jobworker log file location based on the passed

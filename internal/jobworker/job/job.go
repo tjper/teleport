@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
+	"github.com/tjper/teleport/internal/jobworker"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/jobworker/watch"
@@ -32,15 +34,16 @@ func New(
 		return nil, errors.WithStack(err)
 	}
 
+	shellCmd, err := os.Executable()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// TODO: use constants
-	executable := exec.CommandContext(ctx, "jobworker", "reexec")
-	executable.SysProcAttr.Setpgid = true
-	executable.ExtraFiles = []*os.File{
-		cmdOut,
-		continueOut,
-	}
+	executable := exec.CommandContext(ctx, shellCmd, jobworker.Reexec)
+	executable.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	executable.ExtraFiles = []*os.File{cmdOut, continueOut}
 
 	id := uuid.New()
 	watcher := watch.NewModWatcher(output.File(id))

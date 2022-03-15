@@ -5,16 +5,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/tjper/teleport/internal/jobworker"
 )
 
 const (
-  ecSuccess = iota
+	ecSuccess = iota
 )
 
 // TODO: support flags
 const (
 	serveSub = "serve"
-	reexecSub = "reexec"
 )
 
 // Run is the entrypoint of the jobworker CLI.
@@ -23,13 +24,13 @@ func Run() int {
 		return help()
 	}
 
-  ctx, cancel := context.WithCancel(context.Background())
-  defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	switch os.Args[1] {
 	case serveSub:
 		return runServe(ctx)
-	case reexecSub:
+	case jobworker.Reexec:
 		return runReexec(ctx)
 	default:
 		return help()
@@ -41,7 +42,6 @@ func help() int {
 		os.Stdout,
 		"",
 	)
-  // FIXME: should this be success?
-  return ecSuccess
+	// FIXME: should this be success?
+	return ecSuccess
 }
-
