@@ -15,17 +15,17 @@ import (
 type Cgroup struct {
 	// ID is the unique identifier of the cgroup.
 	ID uuid.UUID
-	// Memory is the "memory.high" bytes limit applied to this cgroup. An empty
+	// Memory is the "memory.high" bytes limit applied to this cgroup. A zeroed
 	// value indicates no limit is set.
 	Memory uint64
-	// Cpus is the "cpu.max" limit applied to this cgroup. An empty value
+	// Cpus is the "cpu.max" limit applied to this cgroup. A zeroed value
 	// indicates no limit is set.
 	Cpus float32
 	// DiskWriteBps is the "io.max" bytes written per second limit for 8 block
-	// devices applied to this cgroup. An empty value indicates no limit is set.
+	// devices applied to this cgroup. A zeroed value indicates no limit is set.
 	DiskWriteBps uint64
 	// DiskReadBps is the "io.max" bytes read per second limit for 8 block
-	// devices applied to this cgroup. An empty value indicates no limit is set.
+	// devices applied to this cgroup. A zeroed value indicates no limit is set.
 	DiskReadBps uint64
 
 	// service is the Service a Cgroup belongs to.
