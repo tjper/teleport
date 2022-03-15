@@ -166,7 +166,7 @@ func readDiskDeviceMinors() ([]uint32, error) {
 			return nil
 		}
 
-		stats := unix.Stat_t{}
+		var stats unix.Stat_t
 		if err := unix.Stat(path, &stats); err != nil {
 			logger.Errorf("stats error: %s", err)
 			return nil
