@@ -24,11 +24,12 @@ var logger = log.New(os.Stdout, "cgroups")
 func NewService(options ...ServiceOption) (*Service, error) {
 	s := &Service{
 		mountPath: mountPath,
-		path:      path.Join(mountPath, jobWorkerBase),
 	}
 	for _, option := range options {
 		option(s)
 	}
+
+	s.path = path.Join(s.mountPath, jobWorkerBase)
 
 	if err := s.mount(); err != nil {
 		return nil, err
@@ -112,7 +113,7 @@ func (s Service) Cleanup() error {
 
 // placeInRootCgroup moves the pids into the root cgroup.
 func (s Service) placeInRootCgroup(pids []int) error {
-	file := path.Join(mountPath, cgroupProcs)
+	file := path.Join(s.mountPath, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
 		return errors.WithStack(err)
@@ -132,13 +133,13 @@ func (s Service) placeInRootCgroup(pids []int) error {
 // jobworker cgroups.
 func (s Service) mount() error {
 	// Ensure path to cgroup2 mount point exists.
-	if err := os.MkdirAll(mountPath, fileMode); err != nil {
-		return errors.WithStack(err)
+	if err := os.MkdirAll(s.mountPath, fileMode); err != nil {
+		return errors.Wrapf(err, "path: %s", s.mountPath)
 	}
 
 	// If the mount path does not exist or has no entries, mount the cgroup
 	// filesystem, and make base directory for jobworker cgroups.
-	entries, err := os.ReadDir(mountPath)
+	entries, err := os.ReadDir(s.mountPath)
 	if err != nil || len(entries) == 0 {
 		goto mount
 	}
@@ -151,8 +152,8 @@ func (s Service) mount() error {
 	return nil
 
 mount:
-	if err := unix.Mount("none", mountPath, "cgroup2", 0, ""); err != nil {
-		return errors.WithStack(err)
+	if err := unix.Mount("none", s.mountPath, "cgroup2", 0, ""); err != nil {
+		return errors.Wrapf(err, "path: %s", s.mountPath)
 	}
 
 	// create jobworker base directory for jobworker cgroups.
@@ -180,16 +181,22 @@ func (s Service) cleanup() error {
 			return nil
 		}
 
-		// Extract the cgroup ID. Skip over cgroup.procs files not created by
-		// Service.
-		parts := strings.Split(path, string(filepath.Separator))
-		if len(parts) != 5 {
+		parts := strings.Split(path, s.mountPath)
+		if len(parts) != 2 {
 			return nil
 		}
 
-		cgroupID, err := uuid.Parse(parts[3])
+		cgroup2Path := parts[1]
+		// Extract the cgroup ID. Skip over cgroup.procs files not created by
+		// Service.
+		parts = strings.Split(cgroup2Path, string(filepath.Separator))
+		if len(parts) != 4 {
+			return nil
+		}
+
+		cgroupID, err := uuid.Parse(parts[2])
 		if err != nil {
-			logger.Errorf("non-uuid dir; dir: %s", parts[3])
+			logger.Errorf("non-uuid dir; dir: %s", parts[2])
 			return nil
 		}
 
@@ -218,13 +225,13 @@ func (s Service) cleanup() error {
 
 // unmount unmounts the cgroup2 filesystem.
 func (s Service) unmount() error {
-	return errors.WithStack(unix.Unmount(mountPath, 0))
+	return errors.WithStack(unix.Unmount(s.mountPath, 0))
 }
 
 // enableControllers enables the passed controllers for the root and jobworker
 // cgroup.
 func (s Service) enableControllers(controllers []string) error {
-	if err := enableControllers(mountPath, controllers); err != nil {
+	if err := enableControllers(s.mountPath, controllers); err != nil {
 		return err
 	}
 	if err := enableControllers(s.path, controllers); err != nil {
