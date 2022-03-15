@@ -13,7 +13,6 @@ import (
 	"github.com/tjper/teleport/internal/log"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -78,7 +77,7 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 	}
 
 	if err := cgroup.create(); err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	return cgroup, nil
@@ -86,7 +85,7 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 
 // PlaceInCgroup places the pid in the Service cgroup specified.
 func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
-	return errors.WithStack(cgroup.placePID(pid))
+	return cgroup.placePID(pid)
 }
 
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
@@ -94,7 +93,7 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
 func (s Service) RemoveCgroup(id uuid.UUID) error {
 	cgroup := Cgroup{ID: id, service: s, path: path.Join(s.path, id.String())}
 
-	return errors.WithStack(cgroup.remove())
+	return cgroup.remove()
 }
 
 // Cleanup removes all jobworker Service resources. Whenever a Service instance
@@ -116,13 +115,13 @@ func (s Service) placeInRootCgroup(pids []int) error {
 	file := path.Join(s.mountPath, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("open root cgroup: %w", err)
 	}
 	defer fd.Close()
 
 	for _, pid := range pids {
 		if _, err := fd.WriteString(strconv.Itoa(pid)); err != nil {
-			return errors.WithStack(err)
+			return fmt.Errorf("write to root cgroup: %w", err)
 		}
 	}
 
@@ -134,7 +133,7 @@ func (s Service) placeInRootCgroup(pids []int) error {
 func (s Service) mount() error {
 	// Ensure path to cgroup2 mount point exists.
 	if err := os.MkdirAll(s.mountPath, fileMode); err != nil {
-		return errors.Wrapf(err, "path: %s", s.mountPath)
+		return fmt.Errorf("mount service %s: %w", s.mountPath, err)
 	}
 
 	// If the mount path does not exist or has no entries, mount the cgroup
@@ -147,18 +146,18 @@ func (s Service) mount() error {
 	// cgroup2 filesystem is mounted, ensure jobworker base directory exists and
 	// return.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("create jobworker cgroup: %w", err)
 	}
 	return nil
 
 mount:
 	if err := unix.Mount("none", s.mountPath, "cgroup2", 0, ""); err != nil {
-		return errors.Wrapf(err, "path: %s", s.mountPath)
+		return fmt.Errorf("mount cgroup2 %s: %w", s.mountPath, err)
 	}
 
 	// create jobworker base directory for jobworker cgroups.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("create jobworker cgroup: %w", err)
 	}
 
 	return nil
@@ -205,7 +204,7 @@ func (s Service) cleanup() error {
 
 		return nil
 	}); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("cleanup jobworker cgroup: %w", err)
 	}
 
 	// Remove all jobworker sub cgroups.
@@ -217,7 +216,7 @@ func (s Service) cleanup() error {
 
 	// Remove root jobworker cgroup.
 	if err := unix.Rmdir(s.path); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("rm jobworker cgroup: %w", err)
 	}
 
 	return nil
@@ -225,7 +224,10 @@ func (s Service) cleanup() error {
 
 // unmount unmounts the cgroup2 filesystem.
 func (s Service) unmount() error {
-	return errors.WithStack(unix.Unmount(s.mountPath, 0))
+	if err := unix.Unmount(s.mountPath, 0); err != nil {
+		return fmt.Errorf("unmount cgroup2: %w", err)
+	}
+	return nil
 }
 
 // enableControllers enables the passed controllers for the root and jobworker
@@ -244,14 +246,14 @@ func (s Service) enableControllers(controllers []string) error {
 func enableControllers(dir string, controllers []string) error {
 	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("open %s subtree_control: %w", dir, err)
 	}
 	defer fd.Close()
 
 	for _, controller := range controllers {
 		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
 		if err != nil {
-			return errors.WithStack(err)
+			return fmt.Errorf("enable %s %s controller: %w", dir, controller, err)
 		}
 	}
 
