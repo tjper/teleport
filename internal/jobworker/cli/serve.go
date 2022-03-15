@@ -19,8 +19,16 @@ import (
 )
 
 func runServe(ctx context.Context) int {
-	if len(*key) == 0 || len(*cert) == 0 || len(*caCert) == 0 {
-		return help()
+	switch {
+	case len(*keyFlag) == 0:
+		help("Option -key is required for the serve subcommand.")
+		return ecUnrecognized
+	case len(*certFlag) == 0:
+		help("Option -cert is required for the serve subcommand.")
+		return ecUnrecognized
+	case len(*caCertFlag) == 0:
+		help("Option -ca_cert is required for the serve subcommand.")
+		return ecUnrecognized
 	}
 
 	cgroupSvc, err := cgroup.NewService()
@@ -48,20 +56,20 @@ func runServe(ctx context.Context) int {
 	userSvc := user.Service{}
 	jw := igrpc.NewJobWorker(jobSvc, userSvc)
 
-	cert, err := tls.LoadX509KeyPair(*cert, *key)
+	cert, err := tls.LoadX509KeyPair(*certFlag, *keyFlag)
 	if err != nil {
-		logger.Errorf("load x509 key pair; error: %v", err)
+		logger.Errorf("load x509 key pair; error: %v\nkey: %s\ncert: %s", err, *keyFlag, *certFlag)
 		return ecLoadx509
 	}
 
 	ca := x509.NewCertPool()
-	b, err := ioutil.ReadFile(*caCert)
+	b, err := ioutil.ReadFile(*caCertFlag)
 	if err != nil {
-		logger.Errorf("load CA certificate; error: %v", err)
+		logger.Errorf("load CA certificate; error: %v\nca_cert: %s", err, *caCertFlag)
 		return ecLoadCaCert
 	}
 	if ok := ca.AppendCertsFromPEM(b); !ok {
-		logger.Errorf("failed to build ca; cert: %v", *caCert)
+		logger.Errorf("failed to build ca; cert: %v", *caCertFlag)
 		return ecBuildCaCert
 	}
 
@@ -75,7 +83,7 @@ func runServe(ctx context.Context) int {
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	pb.RegisterJobWorkerServiceServer(srv, jw)
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := fmt.Sprintf(":%d", *portFlag)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		logger.Errorf("listen on %s; error: %v", addr, err)
@@ -83,6 +91,7 @@ func runServe(ctx context.Context) int {
 	}
 	defer lis.Close()
 
+	// TODO: clean server shutdown
 	if err := srv.Serve(lis); err != nil {
 		logger.Errorf("serve on %s; error: %v", addr, err)
 		return ecServe
