@@ -21,10 +21,13 @@ import (
 var logger = log.New(os.Stdout, "cgroups")
 
 // NewService creates a Service instance.
-func NewService() (*Service, error) {
+func NewService(options ...ServiceOption) (*Service, error) {
 	s := &Service{
-		// path has a random ID to ensure Service instance bases do not collide.
-		path: path.Join(mountPath, jobWorkerBase),
+		mountPath: mountPath,
+		path:      path.Join(mountPath, jobWorkerBase),
+	}
+	for _, option := range options {
+		option(s)
 	}
 
 	if err := s.mount(); err != nil {
@@ -46,7 +49,17 @@ func NewService() (*Service, error) {
 // Service facilitates cgroup interactions. Service currently only supports
 // cgroups v2.
 type Service struct {
-	path string
+	mountPath string
+	path      string
+}
+
+// ServiceOption mutates the Service instance. This is typically used for
+// configuration with NewService.
+type ServiceOption func(*Service)
+
+// WithMountPath configures the Service instance to mount cgroup2 on mountPath.
+func WithMountPath(mountPath string) ServiceOption {
+	return func(s *Service) { s.mountPath = mountPath }
 }
 
 // CreateCgroup creates a new Service Cgroup. CgroupOptions may be specified to
