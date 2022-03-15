@@ -56,9 +56,11 @@ type Service struct {
 // configure the Cgroup. On success, the created Cgroup is returned to the
 // caller.
 func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
+	id := uuid.New()
 	cgroup := &Cgroup{
-		ID:      uuid.New(),
+		ID:      id,
 		service: s,
+		path:    path.Join(s.path, id.String()),
 	}
 	for _, option := range options {
 		option(cgroup)
@@ -79,7 +81,7 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
 // specified id.
 func (s Service) RemoveCgroup(id uuid.UUID) error {
-	cgroup := Cgroup{ID: id, service: s}
+	cgroup := Cgroup{ID: id, service: s, path: path.Join(s.path, id.String())}
 
 	return errors.WithStack(cgroup.remove())
 }
@@ -216,7 +218,7 @@ func (s Service) cleanup() error {
 
 	// Remove root jobworker cgroup.
 	if err := unix.Rmdir(s.path); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	return nil
