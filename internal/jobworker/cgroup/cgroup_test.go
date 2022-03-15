@@ -122,18 +122,18 @@ func TestCreateCgroup(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	// defer func() {
-	// 	if err := service.Cleanup(); err != nil {
-	// 		t.Error(err)
-	// 	}
-	// }()
+	defer func() {
+		if err := service.Cleanup(); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	tests := map[string]struct {
 		options []CgroupOption
 	}{
-		// "no options":              {},
-		// "w/ memory limit":         {options: []CgroupOption{WithMemory(1000000000)}},
-		// "w/ cpu limit":            {options: []CgroupOption{WithCpus(1.5)}},
+		"no options":              {},
+		"w/ memory limit":         {options: []CgroupOption{WithMemory(1000000000)}},
+		"w/ cpu limit":            {options: []CgroupOption{WithCpus(1.5)}},
 		"w/ disk write bps limit": {options: []CgroupOption{WithDiskWriteBps(100000)}},
 		"w/ disk read bps limit":  {options: []CgroupOption{WithDiskReadBps(100000)}},
 	}
