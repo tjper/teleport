@@ -21,11 +21,15 @@ import (
 var logger = log.New(os.Stdout, "cgroups")
 
 // NewService creates a Service instance.
-func NewService() (*Service, error) {
+func NewService(options ...ServiceOption) (*Service, error) {
 	s := &Service{
-		// path has a random ID to ensure Service instance bases do not collide.
-		path: path.Join(mountPath, jobWorkerBase),
+		mountPath: mountPath,
 	}
+	for _, option := range options {
+		option(s)
+	}
+
+	s.path = path.Join(s.mountPath, jobWorkerBase)
 
 	if err := s.mount(); err != nil {
 		return nil, err
@@ -36,10 +40,7 @@ func NewService() (*Service, error) {
 		memory,
 		io,
 	}
-	if err := s.enableControllers(mountPath, controllers); err != nil {
-		return nil, err
-	}
-	if err := s.enableControllers(s.path, controllers); err != nil {
+	if err := s.enableControllers(controllers); err != nil {
 		return nil, err
 	}
 
@@ -49,16 +50,28 @@ func NewService() (*Service, error) {
 // Service facilitates cgroup interactions. Service currently only supports
 // cgroups v2.
 type Service struct {
-	path string
+	mountPath string
+	path      string
+}
+
+// ServiceOption mutates the Service instance. This is typically used for
+// configuration with NewService.
+type ServiceOption func(*Service)
+
+// WithMountPath configures the Service instance to mount cgroup2 on mountPath.
+func WithMountPath(mountPath string) ServiceOption {
+	return func(s *Service) { s.mountPath = mountPath }
 }
 
 // CreateCgroup creates a new Service Cgroup. CgroupOptions may be specified to
 // configure the Cgroup. On success, the created Cgroup is returned to the
 // caller.
 func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
+	id := uuid.New()
 	cgroup := &Cgroup{
-		ID:      uuid.New(),
+		ID:      id,
 		service: s,
+		path:    path.Join(s.path, id.String()),
 	}
 	for _, option := range options {
 		option(cgroup)
@@ -79,7 +92,7 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
 // specified id.
 func (s Service) RemoveCgroup(id uuid.UUID) error {
-	cgroup := Cgroup{ID: id, service: s}
+	cgroup := Cgroup{ID: id, service: s, path: path.Join(s.path, id.String())}
 
 	return errors.WithStack(cgroup.remove())
 }
@@ -100,7 +113,7 @@ func (s Service) Cleanup() error {
 
 // placeInRootCgroup moves the pids into the root cgroup.
 func (s Service) placeInRootCgroup(pids []int) error {
-	file := path.Join(mountPath, cgroupProcs)
+	file := path.Join(s.mountPath, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
 		return errors.WithStack(err)
@@ -120,13 +133,13 @@ func (s Service) placeInRootCgroup(pids []int) error {
 // jobworker cgroups.
 func (s Service) mount() error {
 	// Ensure path to cgroup2 mount point exists.
-	if err := os.MkdirAll(mountPath, fileMode); err != nil {
-		return errors.WithStack(err)
+	if err := os.MkdirAll(s.mountPath, fileMode); err != nil {
+		return errors.Wrapf(err, "path: %s", s.mountPath)
 	}
 
 	// If the mount path does not exist or has no entries, mount the cgroup
 	// filesystem, and make base directory for jobworker cgroups.
-	entries, err := os.ReadDir(mountPath)
+	entries, err := os.ReadDir(s.mountPath)
 	if err != nil || len(entries) == 0 {
 		goto mount
 	}
@@ -139,31 +152,13 @@ func (s Service) mount() error {
 	return nil
 
 mount:
-	if err := unix.Mount("none", mountPath, "cgroup2", 0, ""); err != nil {
-		return errors.WithStack(err)
+	if err := unix.Mount("none", s.mountPath, "cgroup2", 0, ""); err != nil {
+		return errors.Wrapf(err, "path: %s", s.mountPath)
 	}
 
 	// create jobworker base directory for jobworker cgroups.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
 		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-// enableControllers enables the passed controllers for the cgroup path passed.
-func (s Service) enableControllers(dir string, controllers []string) error {
-	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	defer fd.Close()
-
-	for _, controller := range controllers {
-		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
-		if err != nil {
-			return errors.WithStack(err)
-		}
 	}
 
 	return nil
@@ -186,16 +181,22 @@ func (s Service) cleanup() error {
 			return nil
 		}
 
-		// Extract the cgroup ID. Skip over cgroup.procs files not created by
-		// Service.
-		parts := strings.Split(path, string(filepath.Separator))
-		if len(parts) != 5 {
+		parts := strings.Split(path, s.mountPath)
+		if len(parts) != 2 {
 			return nil
 		}
 
-		cgroupID, err := uuid.Parse(parts[3])
+		cgroup2Path := parts[1]
+		// Extract the cgroup ID. Skip over cgroup.procs files not created by
+		// Service.
+		parts = strings.Split(cgroup2Path, string(filepath.Separator))
+		if len(parts) != 4 {
+			return nil
+		}
+
+		cgroupID, err := uuid.Parse(parts[2])
 		if err != nil {
-			logger.Errorf("non-uuid dir; dir: %s", parts[3])
+			logger.Errorf("non-uuid dir; dir: %s", parts[2])
 			return nil
 		}
 
@@ -216,7 +217,7 @@ func (s Service) cleanup() error {
 
 	// Remove root jobworker cgroup.
 	if err := unix.Rmdir(s.path); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	return nil
@@ -224,7 +225,37 @@ func (s Service) cleanup() error {
 
 // unmount unmounts the cgroup2 filesystem.
 func (s Service) unmount() error {
-	return errors.WithStack(unix.Unmount(mountPath, 0))
+	return errors.WithStack(unix.Unmount(s.mountPath, 0))
+}
+
+// enableControllers enables the passed controllers for the root and jobworker
+// cgroup.
+func (s Service) enableControllers(controllers []string) error {
+	if err := enableControllers(s.mountPath, controllers); err != nil {
+		return err
+	}
+	if err := enableControllers(s.path, controllers); err != nil {
+		return err
+	}
+	return nil
+}
+
+// enableControllers enables the passed controllers for the cgroup path passed.
+func enableControllers(dir string, controllers []string) error {
+	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	defer fd.Close()
+
+	for _, controller := range controllers {
+		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	return nil
 }
 
 const (

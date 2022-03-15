@@ -30,6 +30,9 @@ type Cgroup struct {
 
 	// service is the Service a Cgroup belongs to.
 	service Service
+
+	// path is the file path to the Cgroup
+	path string
 }
 
 // CgroupOption is a function that mutates Cgroup instances. Typically used
@@ -60,7 +63,7 @@ func WithDiskReadBps(limit uint64) CgroupOption {
 
 // create creates a jobworker cgroup.
 func (c Cgroup) create() error {
-	if err := os.Mkdir(c.path(), fileMode); err != nil {
+	if err := os.Mkdir(c.path, fileMode); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -94,7 +97,7 @@ func (c Cgroup) create() error {
 // placePID adds the specified pid to the cgroup. If the pid exists in another
 // cgroup it will be moved to this cgroup.
 func (c Cgroup) placePID(pid int) error {
-	file := path.Join(c.path(), cgroupProcs)
+	file := path.Join(c.path, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
 		return errors.WithStack(err)
@@ -120,18 +123,14 @@ func (c Cgroup) remove() error {
 	}
 
 	// Remove the cgroup's jobworker directory.
-	err = unix.Rmdir(c.path())
+	err = unix.Rmdir(c.path)
 
 	return errors.WithStack(err)
 }
 
-func (c Cgroup) path() string {
-	return path.Join(c.service.path, c.ID.String())
-}
-
 // readPids retrieves all pids that belong to the jobworker cgroup.
 func (c Cgroup) readPids() ([]int, error) {
-	file := path.Join(c.path(), cgroupProcs)
+	file := path.Join(c.path, cgroupProcs)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, errors.WithStack(err)
