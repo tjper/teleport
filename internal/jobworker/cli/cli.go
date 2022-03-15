@@ -27,7 +27,6 @@ const (
 	ecServe
 )
 
-// TODO: support flags
 const (
 	serveSub = "serve"
 )
@@ -79,6 +78,5 @@ Global Flags:
 `,
 		text,
 	)
-	// FIXME: should this be success?
 	return ecUnrecognized
 }

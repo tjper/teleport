@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
 
 	"github.com/tjper/teleport/internal/encrypt"
 	"github.com/tjper/teleport/internal/jobworker/cgroup"
@@ -11,6 +13,7 @@ import (
 	"github.com/tjper/teleport/internal/jobworker/job"
 	"github.com/tjper/teleport/internal/jobworker/user"
 	pb "github.com/tjper/teleport/proto/gen/go/jobworker/v1"
+	"golang.org/x/sys/unix"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -63,6 +66,21 @@ func runServe(ctx context.Context) int {
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	pb.RegisterJobWorkerServiceServer(srv, jw)
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stopc := make(chan os.Signal, 1)
+	signal.Notify(stopc, unix.SIGINT, unix.SIGTERM)
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case signal := <-stopc:
+			logger.Infof("signal received; signal: %s", signal.String())
+			srv.GracefulStop()
+		}
+	}()
+
 	addr := fmt.Sprintf(":%d", *portFlag)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -71,7 +89,7 @@ func runServe(ctx context.Context) int {
 	}
 	defer lis.Close()
 
-	// TODO: clean server shutdown
+	logger.Infof("jobworker API listening on %s", addr)
 	if err := srv.Serve(lis); err != nil {
 		logger.Errorf("serve on %s; error: %v", addr, err)
 		return ecServe
