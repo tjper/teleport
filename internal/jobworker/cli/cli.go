@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	key    = flag.String("key", "", "path to private key")
-	cert   = flag.String("cert", "", "path to certificate")
-	caCert = flag.String("ca_cert", "", "path to CA certificate")
+	key    = flag.String("key", "", "path to server private key")
+	cert   = flag.String("cert", "", "path to server certificate")
+	caCert = flag.String("ca", "", "path to CA certificate")
 	port   = flag.Int("port", 8080, "port to serve jobworker API")
 )
 
@@ -36,9 +36,6 @@ const (
 // Run is the entrypoint of the jobworker CLI.
 func Run() int {
 	flag.Parse()
-	if len(*key) == 0 || len(*cert) == 0 || len(*caCert) == 0 {
-		return help()
-	}
 
 	if len(os.Args) < 2 {
 		return help()
@@ -60,7 +57,24 @@ func Run() int {
 func help() int {
 	fmt.Fprintf(
 		os.Stdout,
-		"",
+		`
+Jobworker launches a grpc API that allows arbitrary commands to be started, 
+stopped, retrieved, and streamed.
+
+Usage:
+  jobworker [global flags] command
+
+Available Commands:
+  serve       serve jobworker API
+  reexec      create grandchild process to execute arbitrary command passed 
+              from serve process (should not be called)
+
+Global Flags:
+  -port      port to serve jobworker API
+  -cert      server x509 certificate
+  -key       server private key
+  -ca        certificate authority cert
+`,
 	)
 	// FIXME: should this be success?
 	return ecSuccess

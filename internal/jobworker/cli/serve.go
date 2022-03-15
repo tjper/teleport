@@ -19,19 +19,31 @@ import (
 )
 
 func runServe(ctx context.Context) int {
+	if len(*key) == 0 || len(*cert) == 0 || len(*caCert) == 0 {
+		return help()
+	}
+
 	cgroupSvc, err := cgroup.NewService()
 	if err != nil {
 		logger.Errorf("cgroup service setup; error: %v", err)
 		return ecCgroupService
 	}
-	defer cgroupSvc.Cleanup()
+	defer func() {
+		if err := cgroupSvc.Cleanup(); err != nil {
+			logger.Errorf("cgroup service cleanup; error: %v", err)
+		}
+	}()
 
 	jobSvc, err := job.NewService(cgroupSvc)
 	if err != nil {
 		logger.Errorf("job service setup; error: %v", err)
 		return ecJobService
 	}
-	defer jobSvc.Close()
+	defer func() {
+		if err := jobSvc.Close(); err != nil {
+			logger.Errorf("job service closing; error: %v", err)
+		}
+	}()
 
 	userSvc := user.Service{}
 	jw := igrpc.NewJobWorker(jobSvc, userSvc)
@@ -49,11 +61,12 @@ func runServe(ctx context.Context) int {
 		return ecLoadCaCert
 	}
 	if ok := ca.AppendCertsFromPEM(b); !ok {
-		logger.Errorf("failed to build ca; cert: %s", caCert)
+		logger.Errorf("failed to build ca; cert: %v", *caCert)
 		return ecBuildCaCert
 	}
 
 	tlsConfig := &tls.Config{
+		MinVersion:   tls.VersionTLS13,
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    ca,
