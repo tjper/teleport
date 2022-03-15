@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tjper/teleport/internal/errors"
 	"github.com/tjper/teleport/internal/log"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -65,7 +65,7 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 	}
 
 	if err := cgroup.create(); err != nil {
-		return nil, errors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 
 	return cgroup, nil
@@ -73,7 +73,7 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 
 // PlaceInCgroup places the pid in the Service cgroup specified.
 func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
-	return errors.Wrap(cgroup.placePID(pid))
+	return errors.WithStack(cgroup.placePID(pid))
 }
 
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
@@ -81,7 +81,7 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
 func (s Service) RemoveCgroup(id uuid.UUID) error {
 	cgroup := Cgroup{ID: id, service: s}
 
-	return errors.Wrap(cgroup.remove())
+	return errors.WithStack(cgroup.remove())
 }
 
 // Cleanup removes all jobworker Service resources. Whenever a Service instance
@@ -103,13 +103,13 @@ func (s Service) placeInRootCgroup(pids []int) error {
 	file := path.Join(mountPath, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	defer fd.Close()
 
 	for _, pid := range pids {
 		if _, err := fd.WriteString(strconv.Itoa(pid)); err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -121,7 +121,7 @@ func (s Service) placeInRootCgroup(pids []int) error {
 func (s Service) mount() error {
 	// Ensure path to cgroup2 mount point exists.
 	if err := os.MkdirAll(mountPath, fileMode); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// If the mount path does not exist or has no entries, mount the cgroup
@@ -134,18 +134,18 @@ func (s Service) mount() error {
 	// cgroup2 filesystem is mounted, ensure jobworker base directory exists and
 	// return.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	return nil
 
 mount:
 	if err := unix.Mount("none", mountPath, "cgroup2", 0, ""); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// create jobworker base directory for jobworker cgroups.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	return nil
@@ -155,14 +155,14 @@ mount:
 func (s Service) enableControllers(dir string, controllers []string) error {
 	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	defer fd.Close()
 
 	for _, controller := range controllers {
 		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
 		if err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -204,7 +204,7 @@ func (s Service) cleanup() error {
 
 		return nil
 	}); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// Remove all jobworker sub cgroups.
@@ -224,7 +224,7 @@ func (s Service) cleanup() error {
 
 // unmount unmounts the cgroup2 filesystem.
 func (s Service) unmount() error {
-	return errors.Wrap(unix.Unmount(mountPath, 0))
+	return errors.WithStack(unix.Unmount(mountPath, 0))
 }
 
 const (
