@@ -2,12 +2,10 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 
+	"github.com/tjper/teleport/internal/encrypt"
 	"github.com/tjper/teleport/internal/jobworker/cgroup"
 	igrpc "github.com/tjper/teleport/internal/jobworker/grpc"
 	"github.com/tjper/teleport/internal/jobworker/job"
@@ -56,28 +54,10 @@ func runServe(ctx context.Context) int {
 	userSvc := user.Service{}
 	jw := igrpc.NewJobWorker(jobSvc, userSvc)
 
-	cert, err := tls.LoadX509KeyPair(*certFlag, *keyFlag)
+	tlsConfig, err := encrypt.NewServermTLSConfig(*certFlag, *keyFlag, *caCertFlag)
 	if err != nil {
-		logger.Errorf("load x509 key pair; error: %v\nkey: %s\ncert: %s", err, *keyFlag, *certFlag)
-		return ecLoadx509
-	}
-
-	ca := x509.NewCertPool()
-	b, err := ioutil.ReadFile(*caCertFlag)
-	if err != nil {
-		logger.Errorf("load CA certificate; error: %v\nca_cert: %s", err, *caCertFlag)
-		return ecLoadCaCert
-	}
-	if ok := ca.AppendCertsFromPEM(b); !ok {
-		logger.Errorf("failed to build ca; cert: %v", *caCertFlag)
-		return ecBuildCaCert
-	}
-
-	tlsConfig := &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{cert},
-		ClientCAs:    ca,
+		logger.Errorf("setup mTLS config; error: %v", err)
+		return ecTLSConfig
 	}
 
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))

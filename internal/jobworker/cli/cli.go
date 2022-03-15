@@ -22,9 +22,7 @@ const (
 	ecUnrecognized
 	ecCgroupService
 	ecJobService
-	ecLoadx509
-	ecLoadCaCert
-	ecBuildCaCert
+	ecTLSConfig
 	ecListen
 	ecServe
 )
