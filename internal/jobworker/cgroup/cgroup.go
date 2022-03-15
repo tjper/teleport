@@ -73,10 +73,10 @@ func (c Cgroup) create() error {
 		set = append(set, newCPUController(c, c.Cpus))
 	}
 	if c.DiskWriteBps > 0 {
-		set = append(set, newDiskWriteBps(c, c.DiskWriteBps))
+		set = append(set, newDiskWriteBpsController(c, c.DiskWriteBps))
 	}
 	if c.DiskReadBps > 0 {
-		set = append(set, newDiskReadBps(c, c.DiskReadBps))
+		set = append(set, newDiskReadBpsController(c, c.DiskReadBps))
 	}
 
 	for _, controller := range set {
