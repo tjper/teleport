@@ -16,9 +16,10 @@ func TestCleanup(t *testing.T) {
 		t.Skip("must be root to run")
 	}
 
-	service, err := NewService()
+	dir := t.TempDir()
+	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Error(err)
+		t.Errorf("%+v", err)
 		return
 	}
 
@@ -41,7 +42,7 @@ func TestCleanup(t *testing.T) {
 	}
 
 	if err := service.Cleanup(); err != nil {
-		t.Errorf("unexpected error: %v+", err)
+		t.Errorf("unexpected error: %+v", err)
 		return
 	}
 
@@ -56,7 +57,8 @@ func TestCleanupWithCgroups(t *testing.T) {
 		t.Skip("must be root to run")
 	}
 
-	service, err := NewService()
+	dir := t.TempDir()
+	service, err := NewService(WithMountPath(dir))
 	if err != nil {
 		t.Error(err)
 		return
@@ -82,7 +84,8 @@ func TestCleanupWithPids(t *testing.T) {
 		t.Skip("must be root to run")
 	}
 
-	service, err := NewService()
+	dir := t.TempDir()
+	service, err := NewService(WithMountPath(dir))
 	if err != nil {
 		t.Error(err)
 		return
@@ -117,7 +120,8 @@ func TestCreateCgroup(t *testing.T) {
 		t.Skip("must be root to run")
 	}
 
-	service, err := NewService()
+	dir := t.TempDir()
+	service, err := NewService(WithMountPath(dir))
 	if err != nil {
 		t.Error(err)
 		return
@@ -159,7 +163,8 @@ func TestPlaceInCgroup(t *testing.T) {
 		t.Skip("must be root to run")
 	}
 
-	service, err := NewService()
+	dir := t.TempDir()
+	service, err := NewService(WithMountPath(dir))
 	if err != nil {
 		t.Error(err)
 		return
