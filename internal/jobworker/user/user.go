@@ -22,7 +22,7 @@ func (s Service) User(ctx context.Context) (user string, ok bool) {
 	if !ok {
 		return "", false
 	}
-	if len(tlsInfo.State.VerifiedChains) > 0 && len(tlsInfo.State.VerifiedChains[0]) > 0 {
+	if len(tlsInfo.State.VerifiedChains) == 0 || len(tlsInfo.State.VerifiedChains[0]) == 0 {
 		return "", false
 	}
 
