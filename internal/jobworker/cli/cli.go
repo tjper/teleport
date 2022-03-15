@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tjper/teleport/internal/jobworker"
 )
@@ -19,15 +20,22 @@ var (
 
 const (
 	ecSuccess = iota
+	// ecUnrecognized indicates the subcommand was not recognized.
 	ecUnrecognized
+	// ecCgroupService indicates the cgroup service was not setup properly.
 	ecCgroupService
+	// ecJobService indicates the job service was not setup properly.
 	ecJobService
+	// ecTLSConfig indicates the TLS config was not setup properly.
 	ecTLSConfig
+	// ecListen indicates the jobworker API was unable to listen.
 	ecListen
+	// ecServe indicates the jobworker API was unable to serve its content.
 	ecServe
 )
 
 const (
+	// serve is the subcommand used to serve the jobworker API.
 	serveSub = "serve"
 )
 
@@ -53,12 +61,17 @@ func Run() int {
 	}
 }
 
+// help outputs a general overview of the jobworker executable to the user.
+// The text argument may be used to add a detailed help message.
 func help(text string) int {
-	fmt.Fprintf(
-		os.Stdout,
+	var b strings.Builder
+	if text != "" {
+		_, _ = b.WriteString(fmt.Sprintf("\nNotice: %s", text))
+	}
+
+	b.WriteString(
 		`
-Notice: %s
-    
+
 Jobworker launches a grpc API that allows arbitrary commands to be started, 
 stopped, retrieved, and streamed.
 
@@ -75,8 +88,7 @@ Global Flags:
   -cert       server x509 certificate
   -key        server private key
   -ca_cert    certificate authority cert
-`,
-		text,
-	)
+`)
+	fmt.Fprint(os.Stdout, b.String())
 	return ecUnrecognized
 }
