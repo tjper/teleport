@@ -128,7 +128,7 @@ type baseController struct {
 // enable enables a controller by writing to the cgroup.subtree_control file of
 // the cgroup.
 func (c baseController) enable() error {
-	file := path.Join(c.cgroup.path(), cgroupSubtreeControl)
+	file := path.Join(c.cgroup.path, cgroupSubtreeControl)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
 		return errors.WithStack(err)
@@ -141,7 +141,7 @@ func (c baseController) enable() error {
 
 // apply sets the value for the specified control in the controller's cgroup.
 func (c baseController) apply(control, value string) error {
-	file := path.Join(c.cgroup.path(), control)
+	file := path.Join(c.cgroup.path, control)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
 		return errors.WithStack(err)

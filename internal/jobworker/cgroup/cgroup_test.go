@@ -41,12 +41,12 @@ func TestCleanup(t *testing.T) {
 	}
 
 	if err := service.Cleanup(); err != nil {
-		t.Error(err)
+		t.Errorf("unexpected error: %v+", err)
 		return
 	}
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
+		t.Errorf("expected cgroup to not exist; path: %s, error: %v", service.path, err)
 		return
 	}
 }
@@ -146,8 +146,8 @@ func TestCreateCgroup(t *testing.T) {
 				return
 			}
 
-			if _, err := os.Stat(cgroup.path()); err != nil {
-				t.Errorf("expected cgroup to exist; path: %s", cgroup.path())
+			if _, err := os.Stat(cgroup.path); err != nil {
+				t.Errorf("expected cgroup to exist; path: %s", cgroup.path)
 				return
 			}
 		})
