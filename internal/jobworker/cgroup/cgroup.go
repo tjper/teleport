@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/tjper/teleport/internal/errors"
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -61,7 +61,7 @@ func WithDiskReadBps(limit uint64) CgroupOption {
 // create creates a jobworker cgroup.
 func (c Cgroup) create() error {
 	if err := os.Mkdir(c.path(), fileMode); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// determine which controllers should be enabled.
@@ -81,10 +81,10 @@ func (c Cgroup) create() error {
 
 	for _, controller := range set {
 		if err := controller.enable(); err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 		if err := controller.apply(); err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -97,12 +97,12 @@ func (c Cgroup) placePID(pid int) error {
 	file := path.Join(c.path(), cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	defer fd.Close()
 
 	_, err = fd.WriteString(strconv.Itoa(pid))
-	return errors.Wrap(err)
+	return errors.WithStack(err)
 }
 
 // remove removes the jobworker cgroup.
@@ -110,19 +110,19 @@ func (c Cgroup) remove() error {
 	// Read all pids within cgroup.
 	pids, err := c.readPids()
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// Move pids to root cgroup. A cgroup must have no dependent pids in its
 	// cgroup.procs interface file to be removed.
 	if err := c.service.placeInRootCgroup(pids); err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// Remove the cgroup's jobworker directory.
 	err = unix.Rmdir(c.path())
 
-	return errors.Wrap(err)
+	return errors.WithStack(err)
 }
 
 func (c Cgroup) path() string {
@@ -134,7 +134,7 @@ func (c Cgroup) readPids() ([]int, error) {
 	file := path.Join(c.path(), cgroupProcs)
 	fd, err := os.Open(file)
 	if err != nil {
-		return nil, errors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 	defer fd.Close()
 
@@ -143,12 +143,12 @@ func (c Cgroup) readPids() ([]int, error) {
 	for procs.Scan() {
 		pid, err := strconv.Atoi(procs.Text())
 		if err != nil {
-			return nil, errors.Wrap(err)
+			return nil, errors.WithStack(err)
 		}
 		pids = append(pids, pid)
 	}
 	if procs.Err() != nil {
-		return nil, errors.Wrap(procs.Err())
+		return nil, errors.WithStack(procs.Err())
 	}
 
 	return pids, nil

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/tjper/teleport/internal/errors"
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -39,7 +39,7 @@ func (c cpuController) apply() error {
 	limit := c.cpus * period
 	value := fmt.Sprintf("%f %d", limit, period)
 
-	return errors.Wrap(c.baseController.apply(cpuMax, value))
+	return errors.WithStack(c.baseController.apply(cpuMax, value))
 }
 
 // newMemoryController creates a memoryController instance.
@@ -58,7 +58,7 @@ type memoryController struct {
 
 func (c memoryController) apply() error {
 	limit := strconv.FormatUint(c.limit, 10)
-	return errors.Wrap(c.baseController.apply(memoryHigh, limit))
+	return errors.WithStack(c.baseController.apply(memoryHigh, limit))
 }
 
 // diskReadBpsController enables and appplies the rbps "io.max" control.
@@ -70,13 +70,13 @@ type diskReadBpsController struct {
 func (c diskReadBpsController) apply() error {
 	minors, err := readDiskDeviceMinors()
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	for _, minor := range minors {
 		value := fmt.Sprintf("%d:%d rbps=%d", diskDevices, minor, c.limit)
 		if err := c.baseController.apply(ioMax, value); err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -107,13 +107,13 @@ type diskWriteBpsController struct {
 func (c diskWriteBpsController) apply() error {
 	minors, err := readDiskDeviceMinors()
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	for _, minor := range minors {
 		value := fmt.Sprintf("%d:%d wbps=%d", diskDevices, minor, c.limit)
 		if err := c.baseController.apply(ioMax, value); err != nil {
-			return errors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -131,12 +131,12 @@ func (c baseController) enable() error {
 	file := path.Join(c.cgroup.path(), cgroupSubtreeControl)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	defer fd.Close()
 
 	_, err = fd.WriteString(fmt.Sprintf("+%s\n", c.name))
-	return errors.Wrap(err)
+	return errors.WithStack(err)
 }
 
 // apply sets the value for the specified control in the controller's cgroup.
@@ -144,12 +144,12 @@ func (c baseController) apply(control, value string) error {
 	file := path.Join(c.cgroup.path(), control)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	defer fd.Close()
 
 	_, err = fd.WriteString(value)
-	return errors.Wrap(err)
+	return errors.WithStack(err)
 }
 
 // readDiskDeviceMinors retrieves the physical disk device minors of disk
@@ -184,7 +184,7 @@ func readDiskDeviceMinors() ([]uint32, error) {
 		minors = append(minors, minor)
 		return nil
 	}); err != nil {
-		return nil, errors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 
 	return minors, nil
