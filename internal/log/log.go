@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"runtime"
+	"strings"
 )
 
 // New creates a Logger instance.
@@ -43,8 +44,13 @@ func (l Logger) Infof(msg string, args ...interface{}) {
 	l.Printf("[INFO] %s:%d --- %s", file, line, fmt.Sprintf(msg, args...))
 }
 
+// TODO: can this nil pointer dereference?
 func caller(depth int) (string, int) {
 	_, file, line, ok := runtime.Caller(depth)
+	parts := strings.Split(file, "/")
+	if len(parts) > 3 {
+		file = strings.Join(parts[len(parts)-4:len(parts)-1], "/")
+	}
 	if !ok {
 		file = "???"
 		line = 0
