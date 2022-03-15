@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tjper/teleport/internal/jobworker"
+	"github.com/tjper/teleport/internal/log"
 )
 
 var (
@@ -17,6 +18,9 @@ var (
 	caCertFlag = flag.String("ca_cert", "", "path to CA certificate")
 	portFlag   = flag.Int("port", 8080, "port to serve jobworker API")
 )
+
+// logger is an object for logging package events to stdout.
+var logger = log.New(os.Stdout, "cli")
 
 const (
 	ecSuccess = iota

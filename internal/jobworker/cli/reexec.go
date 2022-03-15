@@ -2,14 +2,12 @@ package cli
 
 import (
 	"context"
-	"os"
 
 	"github.com/tjper/teleport/internal/jobworker/reexec"
-	"github.com/tjper/teleport/internal/log"
 )
 
-var logger = log.New(os.Stdout, "cli")
-
+// runReexec is called as a child process. This logic will read Job data from
+// the parent and execute an arbitrary command specific to the Job.
 func runReexec(ctx context.Context) int {
 	exitCode, err := reexec.Exec(ctx)
 	if err != nil {

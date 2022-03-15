@@ -13,13 +13,13 @@ import (
 	"github.com/tjper/teleport/internal/jobworker/job"
 	"github.com/tjper/teleport/internal/jobworker/user"
 	pb "github.com/tjper/teleport/proto/gen/go/jobworker/v1"
-	"golang.org/x/sys/unix"
 
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-// runServe initialzes and configures a gprc.JobWorker instance to serve
+// runServe initializes and configures a gprc.JobWorker instance to serve
 // authenticated clients.
 func runServe(ctx context.Context) int {
 	switch {
