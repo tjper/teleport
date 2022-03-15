@@ -34,3 +34,27 @@ func NewServermTLSConfig(serverCert, serverKey, caCert string) (*tls.Config, err
 		ClientCAs:    ca,
 	}, nil
 }
+
+// NewClientTLSConfig creates a tls.Config suited for a client using mTLS.
+func NewClientTLSConfig(clientCert, clientKey, caCert string) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(clientCert, clientKey)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	ca := x509.NewCertPool()
+	b, err := ioutil.ReadFile(caCert)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if ok := ca.AppendCertsFromPEM(b); !ok {
+		return nil, errors.WithStack(errInvalidCaCert)
+	}
+
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		ServerName:   "localhost",
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      ca,
+	}, nil
+}
