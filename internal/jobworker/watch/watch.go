@@ -3,7 +3,6 @@ package watch
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,7 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	ierrors "github.com/tjper/teleport/internal/errors"
+	"github.com/pkg/errors"
 )
 
 // ErrNotFile indicates that non file path was specified for the ModWatcher.
@@ -54,7 +53,7 @@ func (w *ModWatcher) Watch(ctx context.Context, tick time.Duration) error {
 				continue
 			}
 			if err != nil {
-				return ierrors.Wrap(err)
+				return errors.WithStack(err)
 			}
 			if info.IsDir() {
 				return fmt.Errorf("%w; path: %s", ErrNotFile, w.path)
@@ -92,7 +91,7 @@ retry:
 
 	select {
 	case <-ctx.Done():
-		return ierrors.Wrap(ctx.Err())
+		return errors.WithStack(ctx.Err())
 	case <-modification:
 		return nil
 	}

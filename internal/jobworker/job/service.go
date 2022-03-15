@@ -4,18 +4,17 @@ package job
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
 
-	ierrors "github.com/tjper/teleport/internal/errors"
-	"github.com/tjper/teleport/internal/jobworker/cgroups"
+	"github.com/tjper/teleport/internal/jobworker/cgroup"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/log"
-	"golang.org/x/sys/unix"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 // logger is an object for logging package events to stdout.
@@ -35,17 +34,17 @@ var (
 	ErrJobNotFound = errors.New("job not found")
 )
 
-// ICgroupService specifies Service interactions with cgroups.
+// ICgroupService specifies Service interactions with cgroup.
 type ICgroupService interface {
-	CreateCgroup(...cgroups.CgroupOption) (*cgroups.Cgroup, error)
-	PlaceInCgroup(cgroups.Cgroup, int) error
+	CreateCgroup(...cgroup.CgroupOption) (*cgroup.Cgroup, error)
+	PlaceInCgroup(cgroup.Cgroup, int) error
 	RemoveCgroup(uuid.UUID) error
 }
 
 // NewService creates a new Service intance.
 func NewService(cgroups ICgroupService) (*Service, error) {
 	if err := os.MkdirAll(output.Root, output.FileMode); err != nil {
-		return nil, ierrors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 
 	return &Service{
@@ -68,7 +67,7 @@ type Service struct {
 }
 
 // StartJob starts the job.
-func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.CgroupOption) error {
+func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupOption) error {
 	if !s.isHealthy() {
 		return fmt.Errorf("service unhealthy; err: %w", ErrServiceClosing)
 	}
@@ -80,11 +79,11 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.Cgroup
 
 	cgroup, err := s.cgroups.CreateCgroup(options...)
 	if err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	if err := job.start(); err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	go func() {
 		// Goroutine terminates when job is stopped or exits. This can occur
@@ -104,12 +103,12 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroups.Cgroup
 	// Place Job executable's process within Cgroup.
 	if err := s.cgroups.PlaceInCgroup(*cgroup, job.pid()); err != nil {
 		job.cancel()
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	if err := job.signalContinue(); err != nil {
 		job.cancel()
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	return nil
@@ -155,7 +154,7 @@ func (s *Service) Close() error {
 	})
 
 	if err := unix.Rmdir(output.Root); err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	return nil

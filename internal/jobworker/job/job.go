@@ -3,19 +3,18 @@ package job
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
 
-	ierrors "github.com/tjper/teleport/internal/errors"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/jobworker/watch"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 // New creates a new Job instance.
@@ -25,12 +24,12 @@ func New(
 ) (*Job, error) {
 	cmdOut, cmdIn, err := os.Pipe()
 	if err != nil {
-		return nil, ierrors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 
 	continueOut, continueIn, err := os.Pipe()
 	if err != nil {
-		return nil, ierrors.Wrap(err)
+		return nil, errors.WithStack(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -91,8 +90,8 @@ type Job struct {
 	watcher                 watch.ModWatcher
 }
 
-// StreamOutput streams Job's output to the passed stream channel in chunks of 
-// size chunkSize. StreamOutput will return if either of the following 
+// StreamOutput streams Job's output to the passed stream channel in chunks of
+// size chunkSize. StreamOutput will return if either of the following
 // circumstances occur:
 //
 // 1) The ctx is cancelled.
@@ -103,7 +102,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 
 	fd, err := os.Open(output.File(j.ID))
 	if err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	go func() {
 		<-ctx.Done()
@@ -130,7 +129,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 		// If EOF and job is running, wait for output from job.
 		if errors.Is(err, io.EOF) && j.Status() == Running {
 			if err := j.waitUntilOutput(ctx); err != nil {
-				return ierrors.Wrap(err)
+				return errors.WithStack(err)
 			}
 		}
 		/// If EOF and job is not running, return.
@@ -138,7 +137,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 			return nil
 		}
 		if err != nil {
-			return ierrors.Wrap(err)
+			return errors.WithStack(err)
 		}
 	}
 }
@@ -179,7 +178,7 @@ func (j Job) cleanup() {
 // start launches the Job.
 func (j Job) start() error {
 	if err := j.exec.Start(); err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// Launch job output watcher in a separate goroutine. If Watch returns
@@ -229,7 +228,7 @@ func (j Job) stop() {
 // wait blocks until the Job has exited.
 func (j Job) wait() error {
 	if err := j.exec.Wait(); err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 
 	// Determine nature of process exit.
@@ -247,14 +246,14 @@ func (j Job) wait() error {
 
 // signalContinue instructs the Job's executable to continue.
 func (j Job) signalContinue() error {
-	return ierrors.Wrap(j.continueIn.Close())
+	return errors.WithStack(j.continueIn.Close())
 }
 
 // waitUntilOutput blocks until the Job watcher indicates the Job output has
 // been modified.
 func (j Job) waitUntilOutput(ctx context.Context) error {
 	if err := j.watcher.WaitUntil(ctx); err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }

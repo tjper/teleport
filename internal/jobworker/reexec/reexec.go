@@ -6,18 +6,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"syscall"
 	"time"
 
-	ierrors "github.com/tjper/teleport/internal/errors"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/log"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 // logger is an object for logging package events to stdout.
@@ -77,17 +76,17 @@ func Exec(ctx context.Context) (int, error) {
 
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(cmdfd); err != nil {
-		return CommandFailure, ierrors.Wrap(err)
+		return CommandFailure, errors.WithStack(err)
 	}
 	var job Job
 	if err := json.Unmarshal(buf.Bytes(), &job); err != nil {
-		return CommandFailure, ierrors.Wrap(err)
+		return CommandFailure, errors.WithStack(err)
 	}
 
 	// Create log file for stdout and stderr output.
 	outfd, err := os.OpenFile(output.File(job.ID), os.O_CREATE|os.O_WRONLY, output.FileMode)
 	if err != nil {
-		return CommandFailure, ierrors.Wrap(err)
+		return CommandFailure, errors.WithStack(err)
 	}
 	defer func() {
 		if err := outfd.Close(); err != nil {
@@ -105,11 +104,11 @@ func Exec(ctx context.Context) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := waitForContinue(ctx, contfd); err != nil {
-		return CommandFailure, ierrors.Wrap(err)
+		return CommandFailure, errors.WithStack(err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return CommandFailure, ierrors.Wrap(err)
+		return CommandFailure, errors.WithStack(err)
 	}
 
 	err = cmd.Wait()
@@ -148,7 +147,7 @@ func waitForContinue(ctx context.Context, fd io.ReadCloser) error {
 		return nil
 	}
 	if err != nil {
-		return ierrors.Wrap(err)
+		return errors.WithStack(err)
 	}
 	return errExpectedEOF
 }
