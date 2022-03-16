@@ -234,10 +234,11 @@ func (j Job) stop() {
 
 // wait blocks until the Job has exited.
 func (j *Job) wait() error {
-	if err := j.exec.Wait(); err != nil {
+	var exitErr *exec.ExitError
+	err := j.exec.Wait()
+	if err != nil && !errors.As(err, &exitErr) {
 		return errors.WithStack(err)
 	}
-	logger.Infof("exited - code: %d", j.exec.ProcessState.ExitCode())
 
 	// Determine nature of process exit.
 	switch code := j.exec.ProcessState.ExitCode(); code {

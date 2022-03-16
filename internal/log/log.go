@@ -50,7 +50,7 @@ func caller(depth int) (string, int) {
 
 	// shorten file if it consists of more than 3 parts
 	if len(parts) > 3 {
-		file = strings.Join(parts[len(parts)-4:len(parts)-1], "/")
+		file = strings.Join(parts[len(parts)-3:], "/")
 	}
 	if !ok {
 		file = "???"

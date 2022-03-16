@@ -168,6 +168,7 @@ func TestStatus(t *testing.T) {
 	}
 	tests := map[string]struct {
 		start *pb.StartRequest
+		wait  time.Duration
 		exp   expected
 	}{
 		"ls": {
@@ -175,6 +176,7 @@ func TestStatus(t *testing.T) {
 				Command: &pb.Command{Name: "ls"},
 				Limits:  &pb.Limits{},
 			},
+			wait: 200 * time.Millisecond,
 			exp: expected{
 				resp: &pb.StatusResponse{
 					Status: &pb.StatusDetail{Status: pb.Status_STATUS_EXITED, ExitCode: 0},
@@ -196,7 +198,7 @@ func TestStatus(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			time.Sleep(time.Second)
+			time.Sleep(test.wait)
 
 			resp, err := suite.client.Status(ctx, &pb.StatusRequest{JobId: startResp.JobId})
 			if status.Code(err) != test.exp.code {
@@ -204,6 +206,53 @@ func TestStatus(t *testing.T) {
 			}
 			if !proto.Equal(resp, test.exp.resp) {
 				t.Fatalf("unexpected response; actual: %v, expected: %v", resp, test.exp.resp)
+			}
+		})
+	}
+}
+
+func TestStop(t *testing.T) {
+	type expected struct {
+		code codes.Code
+	}
+	tests := map[string]struct {
+		start *pb.StartRequest
+		exp   expected
+	}{
+		"sleep 10": {
+			start: &pb.StartRequest{
+				Command: &pb.Command{Name: "sleep", Args: []string{"10"}},
+				Limits:  &pb.Limits{},
+			},
+			exp: expected{
+				code: codes.OK,
+			},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			suite := setup(t)
+			defer suite.close(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			startResp, err := suite.client.Start(ctx, test.start)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			_, err = suite.client.Stop(ctx, &pb.StopRequest{JobId: startResp.JobId})
+			if status.Code(err) != test.exp.code {
+				t.Fatalf("unexpected code; actual: %v, expected: %v", status.Code(err), test.exp.code)
+			}
+
+			statusResp, err := suite.client.Status(ctx, &pb.StatusRequest{JobId: startResp.JobId})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if statusResp.Status.Status != pb.Status_STATUS_STOPPED {
+				t.Fatalf("unexpected status; actual: %s, expected: %s", statusResp.Status.Status, pb.Status_STATUS_STOPPED)
 			}
 		})
 	}
