@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -103,7 +103,7 @@ func (c Cgroup) create() error {
 // placePID adds the specified pid to the cgroup. If the pid exists in another
 // cgroup it will be moved to this cgroup.
 func (c Cgroup) placePID(pid int) error {
-	file := path.Join(c.path, cgroupProcs)
+	file := filepath.Join(c.path, cgroupProcs)
 	value := strconv.Itoa(pid)
 
 	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
@@ -137,7 +137,7 @@ func (c Cgroup) remove() error {
 
 // readPids retrieves all pids that belong to the jobworker cgroup.
 func (c Cgroup) readPids() ([]int, error) {
-	file := path.Join(c.path, cgroupProcs)
+	file := filepath.Join(c.path, cgroupProcs)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, fmt.Errorf("read cgroup pids: %w", err)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,7 +27,7 @@ func NewService(options ...ServiceOption) (*Service, error) {
 		option(s)
 	}
 
-	s.path = path.Join(s.mountPath, jobWorkerBase)
+	s.path = filepath.Join(s.mountPath, jobWorkerBase)
 
 	if err := s.mount(); err != nil {
 		return nil, err
@@ -70,7 +69,7 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 	cgroup := &Cgroup{
 		ID:      id,
 		service: s,
-		path:    path.Join(s.path, id.String()),
+		path:    filepath.Join(s.path, id.String()),
 	}
 	for _, option := range options {
 		option(cgroup)
@@ -91,7 +90,7 @@ func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
 // specified id.
 func (s Service) RemoveCgroup(id uuid.UUID) error {
-	cgroup := Cgroup{ID: id, service: s, path: path.Join(s.path, id.String())}
+	cgroup := Cgroup{ID: id, service: s, path: filepath.Join(s.path, id.String())}
 
 	return cgroup.remove()
 }
@@ -112,7 +111,7 @@ func (s Service) Cleanup() error {
 
 // placeInRootCgroup moves the pids into the root cgroup.
 func (s Service) placeInRootCgroup(pids []int) error {
-	file := path.Join(s.mountPath, cgroupProcs)
+	file := filepath.Join(s.mountPath, cgroupProcs)
 
 	for _, pid := range pids {
 		value := strconv.Itoa(pid)
@@ -238,7 +237,7 @@ func (s Service) enableControllers(controllers []string) error {
 
 // enableControllers enables the passed controllers for the cgroup path passed.
 func enableControllers(dir string, controllers []string) error {
-	file := path.Join(dir, cgroupSubtreeControl)
+	file := filepath.Join(dir, cgroupSubtreeControl)
 
 	for _, controller := range controllers {
 		value := fmt.Sprintf("+%s", controller)
