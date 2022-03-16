@@ -4,6 +4,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	"github.com/tjper/teleport/internal/log"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -44,7 +44,7 @@ type ICgroupService interface {
 // NewService creates a new Service intance.
 func NewService(cgroups ICgroupService) (*Service, error) {
 	if err := os.MkdirAll(output.Root, output.FileMode); err != nil {
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("mkdir job service output; path: %v, error: %w", output.Root, err)
 	}
 
 	return &Service{
@@ -81,11 +81,11 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 
 	cgroup, err := s.cgroups.CreateCgroup(options...)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	if err := job.start(); err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 	go func() {
 		// Goroutine terminates when job is stopped or exits. This can occur
@@ -105,12 +105,12 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 	// Place Job executable's process within Cgroup.
 	if err := s.cgroups.PlaceInCgroup(*cgroup, job.pid()); err != nil {
 		job.stop()
-		return errors.WithStack(err)
+		return err
 	}
 
 	if err := job.signalContinue(); err != nil {
 		job.stop()
-		return errors.WithStack(err)
+		return err
 	}
 
 	return nil
@@ -159,7 +159,7 @@ func (s *Service) Close() error {
 	})
 
 	if err := unix.Rmdir(output.Root); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("rmdir job service output; path: %v, error: %w", output.Root, err)
 	}
 
 	return nil

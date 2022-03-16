@@ -3,6 +3,8 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -15,7 +17,6 @@ import (
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 // New creates a new Job instance.
@@ -32,7 +33,7 @@ func New(
 
 	cmdOut, cmdIn, err := os.Pipe()
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("new job cmd pipe; error: %w", err)
 	}
 	closers = append(closers, cmdOut)
 	closers = append(closers, cmdIn)
@@ -40,7 +41,7 @@ func New(
 	continueOut, continueIn, err := os.Pipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("new job continue pipe; error: %w", err)
 	}
 	closers = append(closers, continueOut)
 	closers = append(closers, continueIn)
@@ -48,7 +49,7 @@ func New(
 	shellCmd, err := os.Executable()
 	if err != nil {
 		cleanup()
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("fetch current exec; error: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -114,7 +115,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 
 	fd, err := os.Open(output.File(j.ID))
 	if err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("open job output; error: %w", err)
 	}
 	go func() {
 		<-ctx.Done()
@@ -153,7 +154,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 			return nil
 		}
 		if err != nil {
-			return errors.WithStack(err)
+			return fmt.Errorf("read job output; error: %w", err)
 		}
 	}
 }
@@ -194,7 +195,7 @@ func (j *Job) start() error {
 	logger.Infof("starting Job; ID: %v", j.ID)
 
 	if err := j.exec.Start(); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("start child process; error: %w", err)
 	}
 
 	// Write job details to cmdIn pipe. Child process will read and launch
@@ -237,7 +238,7 @@ func (j *Job) wait() error {
 	var exitErr *exec.ExitError
 	err := j.exec.Wait()
 	if err != nil && !errors.As(err, &exitErr) {
-		return errors.WithStack(err)
+		return fmt.Errorf("waiting for child; error: %w", err)
 	}
 
 	// Determine nature of process exit.
@@ -257,7 +258,10 @@ func (j *Job) wait() error {
 // signalContinue instructs the Job's executable to continue.
 func (j Job) signalContinue() error {
 	logger.Infof("Job signal continue to child; ID: %s", j.ID)
-	return errors.WithStack(j.continueIn.Close())
+	if err := j.continueIn.Close(); err != nil {
+		return fmt.Errorf("signal continue to child; error: %w", err)
+	}
+	return nil
 }
 
 // pid retrieves the Job's executable's pid.
