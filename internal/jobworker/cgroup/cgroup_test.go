@@ -8,10 +8,11 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
-func TestCleanup(t *testing.T) {
+func TestServiceSetupAndCleanup(t *testing.T) {
 	if !isRoot() {
 		t.Skip("must be root to run")
 	}
@@ -19,12 +20,11 @@ func TestCleanup(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Errorf("%+v", err)
-		return
+		t.Fatalf("unexpected error: %s", err)
 	}
 
 	if _, err := os.Stat(service.path); err != nil {
-		t.Error(err)
+		t.Errorf("stat service cgroup; path: %s, error: %s", service.path, err)
 	}
 
 	expected := []string{
@@ -34,7 +34,7 @@ func TestCleanup(t *testing.T) {
 	}
 	controllers, err := readControllers(service.path)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("read service controllers; path: %s, error: %s", service.path, err)
 	}
 
 	if !reflect.DeepEqual(controllers, expected) {
@@ -42,13 +42,11 @@ func TestCleanup(t *testing.T) {
 	}
 
 	if err := service.Cleanup(); err != nil {
-		t.Errorf("unexpected error: %+v", err)
-		return
+		t.Fatalf("service cleanup; error: %s", err)
 	}
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("expected cgroup to not exist; path: %s, error: %v", service.path, err)
-		return
+		t.Fatalf("expected cgroup to not exist; path: %s, error: %v", service.path, err)
 	}
 }
 
@@ -60,8 +58,7 @@ func TestCleanupWithCgroups(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	if _, err := service.CreateCgroup(); err != nil {
@@ -69,13 +66,11 @@ func TestCleanupWithCgroups(t *testing.T) {
 	}
 
 	if err := service.Cleanup(); err != nil {
-		t.Error(err)
-		return
+		t.Fatalf("service cleanup; error: %s", err)
 	}
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
-		return
+		t.Fatalf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
 	}
 }
 
@@ -87,8 +82,7 @@ func TestCleanupWithPids(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	cgroup, err := service.CreateCgroup()
@@ -98,15 +92,15 @@ func TestCleanupWithPids(t *testing.T) {
 
 	cmd := exec.Command("sleep", "30")
 	if err := cmd.Start(); err != nil {
-		t.Error(err)
+		t.Errorf("exec sleep 30: %s", err)
 	}
 
 	if err := service.PlaceInCgroup(*cgroup, cmd.Process.Pid); err != nil {
-		t.Error(err)
+		t.Errorf("place in cgroup; pid: %d, error: %s", cmd.Process.Pid, err)
 	}
 
 	if err := service.Cleanup(); err != nil {
-		t.Error(err)
+		t.Fatalf("service cleanup; error: %s", err)
 	}
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
@@ -123,8 +117,7 @@ func TestCreateCgroup(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	defer func() {
 		if err := service.Cleanup(); err != nil {
@@ -146,13 +139,11 @@ func TestCreateCgroup(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cgroup, err := service.CreateCgroup(test.options...)
 			if err != nil {
-				t.Error(err)
-				return
+				t.Fatalf("create cgroup error: %s", err)
 			}
 
 			if _, err := os.Stat(cgroup.path); err != nil {
-				t.Errorf("expected cgroup to exist; path: %s", cgroup.path)
-				return
+				t.Fatalf("expected cgroup to exist; path: %s", cgroup.path)
 			}
 		})
 	}
@@ -166,8 +157,7 @@ func TestPlaceInCgroup(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewService(WithMountPath(dir))
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	defer func() {
 		if err := service.Cleanup(); err != nil {
@@ -177,33 +167,28 @@ func TestPlaceInCgroup(t *testing.T) {
 
 	cgroup, err := service.CreateCgroup()
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	cmd := exec.Command("sleep", "30")
 	if err := cmd.Start(); err != nil {
-		t.Error(err)
-		return
+		t.Fatalf("exec sleep 30: %s", err)
 	}
 
 	if err := service.PlaceInCgroup(*cgroup, cmd.Process.Pid); err != nil {
-		t.Error(err)
-		return
+		t.Fatalf("place in cgroup; pid: %d, error: %s", cmd.Process.Pid, err)
 	}
 
-	pids, err := cgroup.readPids()
+	pids, err := readPids(cgroup.path)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	if len(pids) != 1 {
-		t.Errorf("unexpected pids; actual: %v, expected: %v", pids, cmd.Process.Pid)
-		return
+		t.Fatalf("unexpected pids; actual: %v, expected: %v", pids, cmd.Process.Pid)
 	}
 	if pids[0] != cmd.Process.Pid {
-		t.Errorf("unexpected pid; actual: %v, expected: %v", pids[0], cmd.Process.Pid)
-		return
+		t.Fatalf("unexpected pid; actual: %v, expected: %v", pids[0], cmd.Process.Pid)
 	}
 }
 
@@ -226,6 +211,30 @@ func readControllers(dir string) ([]string, error) {
 	}
 
 	return controllers, nil
+}
+
+func readPids(dir string) ([]int, error) {
+	file := path.Join(dir, cgroupProcs)
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+
+	var pids []int
+	procs := bufio.NewScanner(fd)
+	for procs.Scan() {
+		pid, err := strconv.Atoi(procs.Text())
+		if err != nil {
+			return nil, err
+		}
+		pids = append(pids, pid)
+	}
+	if procs.Err() != nil {
+		return nil, err
+	}
+
+	return pids, nil
 }
 
 func isRoot() bool {
