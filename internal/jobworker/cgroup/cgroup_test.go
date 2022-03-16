@@ -24,7 +24,7 @@ func TestServiceSetupAndCleanup(t *testing.T) {
 	}
 
 	if _, err := os.Stat(service.path); err != nil {
-		t.Errorf("stat service cgroup; path: %s, error: %s", service.path, err)
+		t.Fatalf("stat service cgroup; path: %s, error: %s", service.path, err)
 	}
 
 	expected := []string{
@@ -34,11 +34,11 @@ func TestServiceSetupAndCleanup(t *testing.T) {
 	}
 	controllers, err := readControllers(service.path)
 	if err != nil {
-		t.Errorf("read service controllers; path: %s, error: %s", service.path, err)
+		t.Fatalf("read service controllers; path: %s, error: %s", service.path, err)
 	}
 
 	if !reflect.DeepEqual(controllers, expected) {
-		t.Errorf("unexpected controllers; actual: %v, expected: %v", controllers, expected)
+		t.Fatalf("unexpected controllers; actual: %v, expected: %v", controllers, expected)
 	}
 
 	if err := service.Cleanup(); err != nil {
@@ -62,7 +62,7 @@ func TestCleanupWithCgroups(t *testing.T) {
 	}
 
 	if _, err := service.CreateCgroup(); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if err := service.Cleanup(); err != nil {
@@ -87,16 +87,16 @@ func TestCleanupWithPids(t *testing.T) {
 
 	cgroup, err := service.CreateCgroup()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	cmd := exec.Command("sleep", "30")
 	if err := cmd.Start(); err != nil {
-		t.Errorf("exec sleep 30: %s", err)
+		t.Fatalf("exec sleep 30: %s", err)
 	}
 
 	if err := service.PlaceInCgroup(*cgroup, cmd.Process.Pid); err != nil {
-		t.Errorf("place in cgroup; pid: %d, error: %s", cmd.Process.Pid, err)
+		t.Fatalf("place in cgroup; pid: %d, error: %s", cmd.Process.Pid, err)
 	}
 
 	if err := service.Cleanup(); err != nil {
@@ -104,7 +104,7 @@ func TestCleanupWithPids(t *testing.T) {
 	}
 
 	if _, err := os.Stat(service.path); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
+		t.Fatalf("expected cgroup to not exist; path: %s, err: %v", service.path, err)
 		return
 	}
 }
@@ -121,7 +121,7 @@ func TestCreateCgroup(t *testing.T) {
 	}
 	defer func() {
 		if err := service.Cleanup(); err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 	}()
 
@@ -161,7 +161,7 @@ func TestPlaceInCgroup(t *testing.T) {
 	}
 	defer func() {
 		if err := service.Cleanup(); err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 	}()
 
@@ -181,7 +181,7 @@ func TestPlaceInCgroup(t *testing.T) {
 
 	pids, err := readPids(cgroup.path)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 		return
 	}
 	if len(pids) != 1 {
