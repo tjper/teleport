@@ -60,8 +60,9 @@ type Service struct {
 	mutex *sync.RWMutex
 	// healthy indicates if Service is accepting to jobs to start.
 	healthy bool
-	// TODO: elaborate why I'm using sync map
-	// TODO: ensure jobs map and job types are staying aligned
+	// jobs is an mapping of Job.ID keys to *Job instances. The sync.Map type has
+	// been used because the data structure is always expanding and deletes never
+	// occur.
 	jobs    *sync.Map
 	cgroups ICgroupService
 }
@@ -95,7 +96,6 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 		if err := job.wait(); err != nil {
 			logger.Errorf("%v; job: %v", err, job.ID)
 		}
-		logger.Infof("job no longer waiting")
 
 		if err := s.cgroups.RemoveCgroup(cgroup.ID); err != nil {
 			logger.Errorf("%v; job: %v, cgroup: %v", err, job.ID, cgroup.ID)
@@ -104,12 +104,12 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 
 	// Place Job executable's process within Cgroup.
 	if err := s.cgroups.PlaceInCgroup(*cgroup, job.pid()); err != nil {
-		job.cancel()
+		job.stop()
 		return errors.WithStack(err)
 	}
 
 	if err := job.signalContinue(); err != nil {
-		job.cancel()
+		job.stop()
 		return errors.WithStack(err)
 	}
 
@@ -121,6 +121,9 @@ func (s Service) StopJob(_ context.Context, id uuid.UUID) error {
 	job, err := s.loadJob(id)
 	if err != nil {
 		return err
+	}
+	if job.Status() != Running {
+		return nil
 	}
 
 	job.stop()

@@ -50,7 +50,6 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
 
-	// TODO: ensure nil req.Command.Args are not being referenced.
 	valid := validator.New()
 	valid.AssertFunc(func() bool { return req.Command != nil }, "command empty")
 	valid.Assert(req.Command.Name != "", "command name empty")

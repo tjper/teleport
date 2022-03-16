@@ -24,22 +24,33 @@ func New(
 	owner string,
 	cmd reexec.Command,
 ) (*Job, error) {
+	var closers []io.Closer
+	cleanup := func() {
+		for _, closer := range closers {
+			closer.Close()
+		}
+	}
+
 	cmdOut, cmdIn, err := os.Pipe()
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
+	closers = append(closers, cmdOut)
+	closers = append(closers, cmdIn)
 
 	continueOut, continueIn, err := os.Pipe()
 	if err != nil {
+		cleanup()
 		return nil, errors.WithStack(err)
 	}
+	closers = append(closers, continueOut)
+	closers = append(closers, continueIn)
 
 	shellCmd, err := os.Executable()
 	if err != nil {
+		cleanup()
 		return nil, errors.WithStack(err)
 	}
-
-	logger.Infof("shell cmd: %s", shellCmd)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -182,7 +193,6 @@ func (j Job) cleanup() {
 
 // start launches the Job.
 func (j *Job) start() error {
-	logger.Infof("starting child process")
 	if err := j.exec.Start(); err != nil {
 		return errors.WithStack(err)
 	}
