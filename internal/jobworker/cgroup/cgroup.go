@@ -67,6 +67,11 @@ func (c Cgroup) create() error {
 		return fmt.Errorf("create cgroup: %w", err)
 	}
 
+	// controller enables and applies cgroup controls
+	type controller interface {
+		enable() error
+		apply() error
+	}
 	// determine which controllers should be enabled.
 	var set []controller
 	if c.Memory > 0 {

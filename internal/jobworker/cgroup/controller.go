@@ -11,12 +11,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// controller enables and applies cgroup controls
-type controller interface {
-	enable() error
-	apply() error
-}
-
 // newCpuController creates a cpuController instance.
 func newCPUController(cgroup Cgroup, cpus float32) *cpuController {
 	return &cpuController{
