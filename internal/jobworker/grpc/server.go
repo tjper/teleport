@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/tjper/teleport/internal/jobworker/cgroup"
 	"github.com/tjper/teleport/internal/jobworker/job"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
 	"github.com/tjper/teleport/internal/log"
@@ -53,7 +54,6 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 	valid := validator.New()
 	valid.AssertFunc(func() bool { return req.Command != nil }, "command empty")
 	valid.Assert(req.Command.Name != "", "command name empty")
-	// TODO: should limits be able to be empty
 	valid.AssertFunc(func() bool { return req.Limits != nil }, "limits empty")
 	if err := valid.Err(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -62,7 +62,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 	j, err := job.New(
 		user,
 		reexec.Command{
-			Name: req.GetCommand().Name,
+			Name: req.Command.Name,
 			Args: req.Command.Args,
 		},
 	)
@@ -71,9 +71,13 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		return nil, status.Error(codes.Internal, "error building job")
 	}
 
-	if err := jw.jobSvc.StartJob(ctx, *j); err != nil {
+	if err := jw.jobSvc.StartJob(
+		ctx,
+		*j,
+		cgroupOptions(req.Limits)...,
+	); err != nil {
 		logger.Errorf("starting job; error: %s", err)
-		return nil, status.Errorf(codes.Internal, "error starting job")
+		return nil, status.Error(codes.Internal, "error starting job")
 	}
 
 	return &pb.StartResponse{
@@ -196,6 +200,23 @@ func (jw JobWorker) fetchJob(ctx context.Context, user string, jobID string) (*j
 	}
 
 	return j, nil
+}
+
+// cgroupOptions builds a slice of cgroup.CgroupOptions based on the limits.
+func cgroupOptions(limits *pb.Limits) []cgroup.CgroupOption {
+	var cgroups []cgroup.CgroupOption
+	add := func(condition bool, option cgroup.CgroupOption) {
+		if condition {
+			cgroups = append(cgroups, option)
+		}
+	}
+
+	add(limits.Memory > 0, cgroup.WithMemory(limits.Memory))
+	add(limits.Cpus > 0, cgroup.WithCpus(limits.Cpus))
+	add(limits.DiskReadBps > 0, cgroup.WithDiskReadBps(limits.DiskReadBps))
+	add(limits.DiskWriteBps > 0, cgroup.WithDiskWriteBps(limits.DiskWriteBps))
+
+	return cgroups
 }
 
 const (

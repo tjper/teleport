@@ -72,6 +72,7 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 		return fmt.Errorf("service unhealthy; err: %w", ErrServiceClosing)
 	}
 
+	// Ensure job.ID is not already in use.
 	if _, ok := s.jobs.Load(job.ID); ok {
 		return fmt.Errorf("%w; job: %v", ErrJobAlreadyStarted, job.ID)
 	}
