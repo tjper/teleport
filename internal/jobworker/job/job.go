@@ -183,9 +183,7 @@ func (j Job) cleanup() {
 	}
 
 	for _, closer := range closers {
-		if err := closer.Close(); err != nil {
-			logger.Warnf("closing; error: %v", err)
-		}
+		closer.Close()
 	}
 }
 

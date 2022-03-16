@@ -66,7 +66,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		},
 	)
 	if err != nil {
-		logger.Errorf("building job; error: %s", err)
+		logger.Errorf("building job; error: %+v", err)
 		return nil, status.Error(codes.Internal, "error building job")
 	}
 
@@ -75,7 +75,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		*j,
 		cgroupOptions(req.Limits)...,
 	); err != nil {
-		logger.Errorf("starting job; error: %s", err)
+		logger.Errorf("starting job; error: %+v", err)
 		return nil, status.Error(codes.Internal, "error starting job")
 	}
 
