@@ -3,9 +3,11 @@ package cgroup
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
@@ -103,7 +105,13 @@ func (c Cgroup) create() error {
 // placePID adds the specified pid to the cgroup. If the pid exists in another
 // cgroup it will be moved to this cgroup.
 func (c Cgroup) placePID(pid int) error {
-	file := filepath.Join(c.path, cgroupProcs)
+	leaf := uuid.New().String()
+	path := filepath.Join(c.path, leaf)
+	if err := os.Mkdir(path, fileMode); err != nil {
+		return fmt.Errorf("create cgroup leaf: %w", err)
+	}
+
+	file := filepath.Join(c.path, leaf, cgroupProcs)
 	value := strconv.Itoa(pid)
 
 	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
@@ -127,6 +135,11 @@ func (c Cgroup) remove() error {
 		return err
 	}
 
+	// Remove the cgroup's leaves.
+	if err := c.removeLeaves(); err != nil {
+		return err
+	}
+
 	// Remove the cgroup's jobworker directory.
 	if err := unix.Rmdir(c.path); err != nil {
 		return fmt.Errorf("remove cgroup: %w", err)
@@ -137,10 +150,99 @@ func (c Cgroup) remove() error {
 
 // readPids retrieves all pids that belong to the jobworker cgroup.
 func (c Cgroup) readPids() ([]int, error) {
-	file := filepath.Join(c.path, cgroupProcs)
-	fd, err := os.Open(file)
+	var pids []int
+	if err := filepath.WalkDir(c.path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			logger.Errorf("reading cgroup pids: %s", err)
+			return nil
+		}
+
+		// Filter out all paths that are not cgroup.procs
+		if !d.Type().IsRegular() || d.Name() != cgroupProcs {
+			return nil
+		}
+
+		// Handle path relative to cgroup path.
+		parts := strings.Split(path, c.path)
+		if len(parts) != 2 {
+			return nil
+		}
+
+		leafPath := parts[1]
+		// Ensure cgroup.procs belongs to leaf cgroup.
+		parts = strings.Split(leafPath, string(filepath.Separator))
+		if len(parts) != 3 {
+			return nil
+		}
+
+		leafPids, err := readLeafPids(path)
+		if err != nil {
+			logger.Errorf("reading leaf pids; path: %v, error: %v", path, err)
+		}
+		pids = append(pids, leafPids...)
+
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk cgroup leaf cgroup.procs: %w", err)
+	}
+
+	return pids, nil
+}
+
+func (c Cgroup) removeLeaves() error {
+	var leaves []uuid.UUID
+	if err := filepath.WalkDir(c.path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			logger.Errorf("reading cgroup leaves: %v", err)
+			return nil
+		}
+
+		// Filter out all paths that are not cgroup.procs
+		if !d.Type().IsRegular() || d.Name() != cgroupProcs {
+			return nil
+		}
+
+		// Handle path relative to cgroup path.
+		parts := strings.Split(path, c.path)
+		if len(parts) != 2 {
+			return nil
+		}
+		leafPath := parts[1]
+
+		// Extract the leaf cgroup ID. Skip over cgroup.procs that are not on
+		// leaves.
+		parts = strings.Split(leafPath, string(filepath.Separator))
+		if len(parts) != 3 {
+			return nil
+		}
+
+		leafCgroupID, err := uuid.Parse(parts[1])
+		if err != nil {
+			logger.Errorf("non-uuid dir; dir: %s", parts[2])
+			return nil
+		}
+
+		// Build list of leaf cgroups in cgroup.
+		leaves = append(leaves, leafCgroupID)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("walk cgroup leaves: %w", err)
+	}
+
+	for _, leaf := range leaves {
+		path := filepath.Join(c.path, leaf.String())
+		if err := unix.Rmdir(path); err != nil {
+			return fmt.Errorf("rm leaf cgroup; path: %s, error: %v", path, err)
+		}
+	}
+	return nil
+}
+
+// readLeafPids retrieves all pids that belong to leaf cgroup.
+func readLeafPids(path string) ([]int, error) {
+	fd, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("read cgroup pids: %w", err)
+		return nil, fmt.Errorf("read leaf cgroup pids: %w", err)
 	}
 	defer fd.Close()
 
@@ -149,12 +251,12 @@ func (c Cgroup) readPids() ([]int, error) {
 	for procs.Scan() {
 		pid, err := strconv.Atoi(procs.Text())
 		if err != nil {
-			return nil, fmt.Errorf("scan cgroup.procs pids atoi: %w", err)
+			return nil, fmt.Errorf("scan leaf cgroup.procs pids atoi: %w", err)
 		}
 		pids = append(pids, pid)
 	}
 	if procs.Err() != nil {
-		return nil, fmt.Errorf("scan cgroup.procs pids: %w", err)
+		return nil, fmt.Errorf("scan leaf cgroup.procs pids: %w", err)
 	}
 
 	return pids, nil

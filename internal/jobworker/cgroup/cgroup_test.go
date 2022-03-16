@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/tjper/teleport/internal/device"
@@ -180,7 +180,6 @@ func TestPlaceInCgroup(t *testing.T) {
 	pids, err := readPids(cgroup.path)
 	if err != nil {
 		t.Fatal(err)
-		return
 	}
 	if len(pids) != 1 {
 		t.Fatalf("unexpected pids; actual: %v, expected: %v", pids, cmd.Process.Pid)
@@ -286,25 +285,39 @@ func readControllers(dir string) ([]string, error) {
 	return controllers, nil
 }
 
-func readPids(dir string) ([]int, error) {
-	file := filepath.Join(dir, cgroupProcs)
-	fd, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer fd.Close()
-
+func readPids(cgroupPath string) ([]int, error) {
 	var pids []int
-	procs := bufio.NewScanner(fd)
-	for procs.Scan() {
-		pid, err := strconv.Atoi(procs.Text())
+	if err := filepath.WalkDir(cgroupPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, err
+			return nil
 		}
-		pids = append(pids, pid)
-	}
-	if procs.Err() != nil {
-		return nil, err
+
+		// Filter out all paths that are not cgroup.procs
+		if !d.Type().IsRegular() || d.Name() != cgroupProcs {
+			return nil
+		}
+
+		parts := strings.Split(path, cgroupPath)
+		if len(parts) != 2 {
+			return nil
+		}
+
+		leafPath := parts[1]
+		// Ensure cgroup.procs belongs to leaf cgroup.
+		parts = strings.Split(leafPath, string(filepath.Separator))
+		if len(parts) != 3 {
+			return nil
+		}
+
+		leafPids, err := readLeafPids(path)
+		if err != nil {
+			logger.Errorf("reading leaf pids; path: %v, error: %v", path, err)
+		}
+		pids = append(pids, leafPids...)
+
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk cgroup leaf cgroup.procs: %w", err)
 	}
 
 	return pids, nil
