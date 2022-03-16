@@ -158,7 +158,6 @@ func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_Out
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
 
-	// TODO: to buffer or not to buffer (buffer)
 	outputc := make(chan []byte, streamBuffer)
 	go func() {
 		if err := j.StreamOutput(ctx, outputc, chunkSize); err != nil {
@@ -193,8 +192,8 @@ func (jw JobWorker) fetchJob(ctx context.Context, user string, jobID string) (*j
 	}
 
 	if j.Owner != user {
-		// Here we return codes.NotFound to prevent clients from determining that a
-		// job IDs exists without having access to it.
+		// Here we return codes.NotFound to prevent clients from determining what
+		// job IDs exists without having access to them.
 		return nil, status.Error(codes.NotFound, "unknown job ID")
 	}
 

@@ -13,7 +13,6 @@ import (
 	"github.com/tjper/teleport/internal/jobworker"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
-	"github.com/tjper/teleport/internal/jobworker/watch"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -58,12 +57,9 @@ func New(
 	executable.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	executable.ExtraFiles = []*os.File{cmdOut, continueOut}
 
-	id := uuid.New()
-	watcher := watch.NewModWatcher(output.File(id))
-
 	return &Job{
 		mutex:       new(sync.RWMutex),
-		ID:          id,
+		ID:          uuid.New(),
 		Owner:       owner,
 		cmd:         cmd,
 		status:      Pending,
@@ -75,7 +71,6 @@ func New(
 		cmdOut:      cmdOut,
 		continueIn:  continueIn,
 		continueOut: continueOut,
-		watcher:     *watcher,
 	}, nil
 }
 
@@ -103,7 +98,6 @@ type Job struct {
 	exec                    *exec.Cmd
 	cmdIn, cmdOut           io.WriteCloser
 	continueIn, continueOut io.WriteCloser
-	watcher                 watch.ModWatcher
 }
 
 // StreamOutput streams Job's output to the passed stream channel in chunks of
@@ -123,8 +117,6 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 	go func() {
 		<-ctx.Done()
 		fd.Close()
-		// FIXME: does closing the file return a EOF error?
-		// FIXME: handle fd.Close error
 	}()
 
 	b := make([]byte, chunkSize)
@@ -144,9 +136,15 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 		}
 		// If EOF and job is running, wait for output from job.
 		if errors.Is(err, io.EOF) && j.Status() == Running {
-			if err := j.waitUntilOutput(ctx); err != nil {
-				return errors.WithStack(err)
-			}
+			// TODO: This is a placeholder. Streaming implementation using inotify
+			// API will be in another PR. This will be replaced by something like
+			// select {
+			// case <-ctx.Done():
+			//   return ctx.Err()
+			// case <-j.watchOutput()
+			// }
+			time.Sleep(time.Second)
+			continue
 		}
 		/// If EOF and job is not running, return.
 		if errors.Is(err, io.EOF) {
@@ -197,16 +195,6 @@ func (j *Job) start() error {
 		return errors.WithStack(err)
 	}
 
-	// Launch job output watcher in a separate goroutine. If Watch returns
-	// anything other than context.Canceled, terminate the job, as the output
-	// is not being watched.
-	go func() {
-		err := j.watcher.Watch(j.ctx, tick)
-		if !errors.Is(err, context.Canceled) {
-			j.stop()
-		}
-	}()
-
 	// Write job details to cmdIn pipe. Child process will read and launch
 	// grandchild process.
 	go func() {
@@ -225,7 +213,6 @@ func (j *Job) start() error {
 			j.stop()
 			return
 		}
-		logger.Infof("writing reexec job: %s", b)
 		if _, err := j.cmdIn.Write(b); err != nil {
 			j.stop()
 			return
@@ -268,15 +255,6 @@ func (j Job) signalContinue() error {
 	return errors.WithStack(j.continueIn.Close())
 }
 
-// waitUntilOutput blocks until the Job watcher indicates the Job output has
-// been modified.
-func (j Job) waitUntilOutput(ctx context.Context) error {
-	if err := j.watcher.WaitUntil(ctx); err != nil {
-		return errors.WithStack(err)
-	}
-	return nil
-}
-
 // pid retrieves the Job's executable's pid.
 func (j Job) pid() int {
 	return j.exec.Process.Pid
@@ -312,7 +290,4 @@ const (
 	// noExit is the default process exit code. It indicates a process has not
 	// exited, or it was terminated by a signal.
 	noExit = -1
-
-	// tick is the default modification watcher interval.
-	tick = time.Second
 )
