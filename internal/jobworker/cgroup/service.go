@@ -136,30 +136,28 @@ func (s Service) mount() error {
 		return fmt.Errorf("mount service %s: %w", s.mountPath, err)
 	}
 
-	// If the mount path does not exist or has no entries, mount the cgroup
-	// filesystem, and make base directory for jobworker cgroups.
+	// If the mount path does not exist or has no entries, mount the cgroup2
+	// filesystem.
 	entries, err := os.ReadDir(s.mountPath)
 	if err != nil || len(entries) == 0 {
-		goto mount
+		if err := s.mountCgroup2(); err != nil {
+			return err
+		}
 	}
 
-	// cgroup2 filesystem is mounted, ensure jobworker base directory exists and
-	// return.
+	// cgroup2 filesystem is mounted, ensure jobworker base directory exists.
 	if err := os.MkdirAll(s.path, fileMode); err != nil {
 		return fmt.Errorf("create jobworker cgroup: %w", err)
 	}
-	return nil
 
-mount:
+	return nil
+}
+
+// mountCgroup2 mounts cgroup2 to the Service mountPath.
+func (s Service) mountCgroup2() error {
 	if err := unix.Mount("none", s.mountPath, "cgroup2", 0, ""); err != nil {
 		return fmt.Errorf("mount cgroup2 %s: %w", s.mountPath, err)
 	}
-
-	// create jobworker base directory for jobworker cgroups.
-	if err := os.MkdirAll(s.path, fileMode); err != nil {
-		return fmt.Errorf("create jobworker cgroup: %w", err)
-	}
-
 	return nil
 }
 
