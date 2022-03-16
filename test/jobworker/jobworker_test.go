@@ -112,7 +112,7 @@ func TestStart(t *testing.T) {
 		},
 		"ls w/ limits": {
 			req: &pb.StartRequest{
-				Command: &pb.Command{Name: "ls", Args: []string{"-la"}},
+				Command: &pb.Command{Name: "ls"},
 				Limits: &pb.Limits{
 					Memory:       100000,
 					Cpus:         1.5,
@@ -122,7 +122,7 @@ func TestStart(t *testing.T) {
 			},
 			exp: expected{
 				resp: &pb.StartResponse{
-					Command: &pb.Command{Name: "ls", Args: []string{"-la"}},
+					Command: &pb.Command{Name: "ls"},
 					Status:  &pb.StatusDetail{Status: pb.Status_STATUS_PENDING, ExitCode: -1},
 					Limits: &pb.Limits{
 						Memory:       100000,
