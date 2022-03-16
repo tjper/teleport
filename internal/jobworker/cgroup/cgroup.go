@@ -2,12 +2,12 @@ package cgroup
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path"
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -15,17 +15,17 @@ import (
 type Cgroup struct {
 	// ID is the unique identifier of the cgroup.
 	ID uuid.UUID
-	// Memory is the "memory.high" bytes limit applied to this cgroup. An empty
+	// Memory is the "memory.high" bytes limit applied to this cgroup. A zeroed
 	// value indicates no limit is set.
 	Memory uint64
-	// Cpus is the "cpu.max" limit applied to this cgroup. An empty value
+	// Cpus is the "cpu.max" limit applied to this cgroup. A zeroed value
 	// indicates no limit is set.
 	Cpus float32
 	// DiskWriteBps is the "io.max" bytes written per second limit for 8 block
-	// devices applied to this cgroup. An empty value indicates no limit is set.
+	// devices applied to this cgroup. A zeroed value indicates no limit is set.
 	DiskWriteBps uint64
 	// DiskReadBps is the "io.max" bytes read per second limit for 8 block
-	// devices applied to this cgroup. An empty value indicates no limit is set.
+	// devices applied to this cgroup. A zeroed value indicates no limit is set.
 	DiskReadBps uint64
 
 	// service is the Service a Cgroup belongs to.
@@ -61,10 +61,16 @@ func WithDiskReadBps(limit uint64) CgroupOption {
 	return func(c *Cgroup) { c.DiskReadBps = limit }
 }
 
+// controller enables and applies cgroup controls.
+type controller interface {
+	enable() error
+	apply() error
+}
+
 // create creates a jobworker cgroup.
 func (c Cgroup) create() error {
 	if err := os.Mkdir(c.path, fileMode); err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("create cgroup: %w", err)
 	}
 
 	// determine which controllers should be enabled.
@@ -84,10 +90,10 @@ func (c Cgroup) create() error {
 
 	for _, controller := range set {
 		if err := controller.enable(); err != nil {
-			return errors.WithStack(err)
+			return fmt.Errorf("enable controller: %w", err)
 		}
 		if err := controller.apply(); err != nil {
-			return errors.WithStack(err)
+			return fmt.Errorf("apply controller: %w", err)
 		}
 	}
 
@@ -100,12 +106,14 @@ func (c Cgroup) placePID(pid int) error {
 	file := path.Join(c.path, cgroupProcs)
 	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
 	if err != nil {
-		return errors.WithStack(err)
+		return fmt.Errorf("open cgroup cgroup.procs: %w", err)
 	}
 	defer fd.Close()
 
-	_, err = fd.WriteString(strconv.Itoa(pid))
-	return errors.WithStack(err)
+	if _, err := fd.WriteString(strconv.Itoa(pid)); err != nil {
+		return fmt.Errorf("write cgroup pid: %w", err)
+	}
+	return nil
 }
 
 // remove removes the jobworker cgroup.
@@ -113,19 +121,21 @@ func (c Cgroup) remove() error {
 	// Read all pids within cgroup.
 	pids, err := c.readPids()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	// Move pids to root cgroup. A cgroup must have no dependent pids in its
 	// cgroup.procs interface file to be removed.
 	if err := c.service.placeInRootCgroup(pids); err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	// Remove the cgroup's jobworker directory.
-	err = unix.Rmdir(c.path)
+	if err := unix.Rmdir(c.path); err != nil {
+		return fmt.Errorf("remove cgroup: %w", err)
+	}
 
-	return errors.WithStack(err)
+	return nil
 }
 
 // readPids retrieves all pids that belong to the jobworker cgroup.
@@ -133,7 +143,7 @@ func (c Cgroup) readPids() ([]int, error) {
 	file := path.Join(c.path, cgroupProcs)
 	fd, err := os.Open(file)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("read cgroup pids: %w", err)
 	}
 	defer fd.Close()
 
@@ -142,12 +152,12 @@ func (c Cgroup) readPids() ([]int, error) {
 	for procs.Scan() {
 		pid, err := strconv.Atoi(procs.Text())
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, fmt.Errorf("scan cgroup.procs pids atoi: %w", err)
 		}
 		pids = append(pids, pid)
 	}
 	if procs.Err() != nil {
-		return nil, errors.WithStack(procs.Err())
+		return nil, fmt.Errorf("scan cgroup.procs pids: %w", err)
 	}
 
 	return pids, nil

@@ -2,21 +2,12 @@ package cgroup
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 
-	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
+	"github.com/tjper/teleport/internal/device"
 )
-
-// controller enables and applies cgroup controls
-type controller interface {
-	enable() error
-	apply() error
-}
 
 // newCpuController creates a cpuController instance.
 func newCPUController(cgroup Cgroup, cpus float32) *cpuController {
@@ -37,9 +28,12 @@ func (c cpuController) apply() error {
 		period = 100000
 	)
 	limit := c.cpus * period
-	value := fmt.Sprintf("%f %d", limit, period)
+	value := fmt.Sprintf("%d %d", int(limit), period)
 
-	return errors.WithStack(c.baseController.apply(cpuMax, value))
+	if err := c.baseController.apply(cpuMax, value); err != nil {
+		return err
+	}
+	return nil
 }
 
 // newMemoryController creates a memoryController instance.
@@ -58,7 +52,10 @@ type memoryController struct {
 
 func (c memoryController) apply() error {
 	limit := strconv.FormatUint(c.limit, 10)
-	return errors.WithStack(c.baseController.apply(memoryHigh, limit))
+	if err := c.baseController.apply(memoryHigh, limit); err != nil {
+		return err
+	}
+	return nil
 }
 
 // diskReadBpsController enables and appplies the rbps "io.max" control.
@@ -68,15 +65,15 @@ type diskReadBpsController struct {
 }
 
 func (c diskReadBpsController) apply() error {
-	minors, err := readDiskDeviceMinors()
+	minors, err := device.ReadDeviceMinors(diskDevices, diskPhysicalMinors)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	for _, minor := range minors {
 		value := fmt.Sprintf("%d:%d rbps=%d", diskDevices, minor, c.limit)
 		if err := c.baseController.apply(ioMax, value); err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 	}
 	return nil
@@ -105,15 +102,15 @@ type diskWriteBpsController struct {
 }
 
 func (c diskWriteBpsController) apply() error {
-	minors, err := readDiskDeviceMinors()
+	minors, err := device.ReadDeviceMinors(diskDevices, diskPhysicalMinors)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	for _, minor := range minors {
 		value := fmt.Sprintf("%d:%d wbps=%d", diskDevices, minor, c.limit)
 		if err := c.baseController.apply(ioMax, value); err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 	}
 	return nil
@@ -129,70 +126,26 @@ type baseController struct {
 // the cgroup.
 func (c baseController) enable() error {
 	file := path.Join(c.cgroup.path, cgroupSubtreeControl)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	defer fd.Close()
+	value := fmt.Sprintf("+%s\n", c.name)
 
-	_, err = fd.WriteString(fmt.Sprintf("+%s\n", c.name))
-	return errors.WithStack(err)
+	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
+		return fmt.Errorf("enable %s on %s: %w", c.name, file, err)
+	}
+	return nil
 }
 
 // apply sets the value for the specified control in the controller's cgroup.
 func (c baseController) apply(control, value string) error {
 	file := path.Join(c.cgroup.path, control)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	defer fd.Close()
 
-	_, err = fd.WriteString(value)
-	return errors.WithStack(err)
-}
-
-// readDiskDeviceMinors retrieves the physical disk device minors of disk
-// (8 block) devices.
-func readDiskDeviceMinors() ([]uint32, error) {
-	var minors []uint32
-	if err := filepath.WalkDir(devices, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			logger.Errorf("walking devices; error: %v", err)
-			return nil
-		}
-
-		if d.Type() != fs.ModeDevice {
-			return nil
-		}
-
-		var stats unix.Stat_t
-		if err := unix.Stat(path, &stats); err != nil {
-			logger.Errorf("stats error: %s", err)
-			return nil
-		}
-
-		if unix.Major(stats.Rdev) != diskDevices {
-			return nil
-		}
-
-		minor := unix.Minor(stats.Rdev)
-		if minor%diskPhysicalMinors != 0 {
-			return nil
-		}
-
-		minors = append(minors, minor)
-		return nil
-	}); err != nil {
-		return nil, errors.WithStack(err)
+	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
+		return fmt.Errorf("apply %s %s to %s: %w", control, value, file, err)
 	}
 
-	return minors, nil
+	return nil
 }
 
 const (
-	// devices is the dev filesystem.
-	devices = "/dev"
 	// diskDevices is major number for disk devices.
 	diskDevices = 8
 	// diskPhysicalMinors is the numbers between disk device minor numbers.
