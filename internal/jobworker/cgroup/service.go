@@ -173,6 +173,7 @@ func (s Service) cleanup() error {
 			return nil
 		}
 
+		// Handle path relative to mountPath.
 		parts := strings.Split(path, s.mountPath)
 		if len(parts) != 2 {
 			return nil
