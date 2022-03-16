@@ -3,6 +3,7 @@ package cgroup
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -10,6 +11,8 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/tjper/teleport/internal/device"
 )
 
 func TestServiceSetupAndCleanup(t *testing.T) {
@@ -192,6 +195,81 @@ func TestPlaceInCgroup(t *testing.T) {
 	}
 }
 
+func TestControllers(t *testing.T) {
+	dir := t.TempDir()
+	cgroup := Cgroup{path: dir}
+
+	type expected struct {
+		enabled string
+		values  string
+	}
+	tests := map[string]struct {
+		file       string
+		controller controller
+		exp        expected
+	}{
+		"memory": {
+			file:       "memory.high",
+			controller: newMemoryController(cgroup, 1024),
+			exp: expected{
+				enabled: "+memory\n",
+				values:  "1024",
+			},
+		},
+		"cpu": {
+			file:       "cpu.max",
+			controller: newCPUController(cgroup, 1.5),
+			exp: expected{
+				enabled: "+cpu\n",
+				values:  "150000 100000",
+			},
+		},
+		"disk rbps": {
+			file:       "io.max",
+			controller: newDiskReadBpsController(cgroup, 2048),
+			exp: expected{
+				enabled: "+io\n",
+				values:  ioMaxValue(t, "rbps", "2048"),
+			},
+		},
+		"disk wbps": {
+			file:       "io.max",
+			controller: newDiskWriteBpsController(cgroup, 4096),
+			exp: expected{
+				enabled: "+io\n",
+				values:  ioMaxValue(t, "wbps", "4096"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := test.controller.enable(); err != nil {
+				t.Fatalf("enable controller; error: %s", err)
+			}
+			if err := test.controller.apply(); err != nil {
+				t.Fatalf("apply controller; error: %s", err)
+			}
+
+			b, err := os.ReadFile(path.Join(dir, cgroupSubtreeControl))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(b) != test.exp.enabled {
+				t.Fatalf("controllers unexpected; actual: %s, expected: %s", b, test.exp.enabled)
+			}
+
+			b, err = os.ReadFile(path.Join(dir, test.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(b) != test.exp.values {
+				t.Fatalf("control values unexpected; actual: %s, expected: %s", b, test.exp.values)
+			}
+		})
+	}
+}
+
 func readControllers(dir string) ([]string, error) {
 	fd, err := os.Open(path.Join(dir, cgroupSubtreeControl))
 	if err != nil {
@@ -235,6 +313,21 @@ func readPids(dir string) ([]int, error) {
 	}
 
 	return pids, nil
+}
+
+func ioMaxValue(t *testing.T, key, value string) string {
+	minors, err := device.ReadDeviceMinors(diskDevices, diskPhysicalMinors)
+	if err != nil {
+		t.Fatal(t)
+	}
+
+	var max uint32
+	for _, minor := range minors {
+		if minor > max {
+			max = minor
+		}
+	}
+	return fmt.Sprintf("%d:%d %s=%s", diskDevices, max, key, value)
 }
 
 func isRoot() bool {

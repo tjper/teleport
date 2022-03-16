@@ -2,13 +2,11 @@ package cgroup
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 
-	"golang.org/x/sys/unix"
+	"github.com/tjper/teleport/internal/device"
 )
 
 // newCpuController creates a cpuController instance.
@@ -30,7 +28,7 @@ func (c cpuController) apply() error {
 		period = 100000
 	)
 	limit := c.cpus * period
-	value := fmt.Sprintf("%f %d", limit, period)
+	value := fmt.Sprintf("%d %d", int(limit), period)
 
 	if err := c.baseController.apply(cpuMax, value); err != nil {
 		return err
@@ -67,7 +65,7 @@ type diskReadBpsController struct {
 }
 
 func (c diskReadBpsController) apply() error {
-	minors, err := readDiskDeviceMinors()
+	minors, err := device.ReadDeviceMinors(diskDevices, diskPhysicalMinors)
 	if err != nil {
 		return err
 	}
@@ -104,7 +102,7 @@ type diskWriteBpsController struct {
 }
 
 func (c diskWriteBpsController) apply() error {
-	minors, err := readDiskDeviceMinors()
+	minors, err := device.ReadDeviceMinors(diskDevices, diskPhysicalMinors)
 	if err != nil {
 		return err
 	}
@@ -147,47 +145,7 @@ func (c baseController) apply(control, value string) error {
 	return nil
 }
 
-// readDiskDeviceMinors retrieves the physical disk device minors of disk
-// (8 block) devices.
-func readDiskDeviceMinors() ([]uint32, error) {
-	var minors []uint32
-	if err := filepath.WalkDir(devices, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			logger.Errorf("walking devices; error: %v", err)
-			return nil
-		}
-
-		if d.Type() != fs.ModeDevice {
-			return nil
-		}
-
-		var stats unix.Stat_t
-		if err := unix.Stat(path, &stats); err != nil {
-			logger.Errorf("stats error: %s", err)
-			return nil
-		}
-
-		if unix.Major(stats.Rdev) != diskDevices {
-			return nil
-		}
-
-		minor := unix.Minor(stats.Rdev)
-		if minor%diskPhysicalMinors != 0 {
-			return nil
-		}
-
-		minors = append(minors, minor)
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("read disk device minors: %w", err)
-	}
-
-	return minors, nil
-}
-
 const (
-	// devices is the dev filesystem.
-	devices = "/dev"
 	// diskDevices is major number for disk devices.
 	diskDevices = 8
 	// diskPhysicalMinors is the numbers between disk device minor numbers.
