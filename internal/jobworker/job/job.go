@@ -39,6 +39,8 @@ func New(
 		return nil, errors.WithStack(err)
 	}
 
+	logger.Infof("shell cmd: %s", shellCmd)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	executable := exec.CommandContext(ctx, shellCmd, jobworker.Reexec)
@@ -162,7 +164,7 @@ func (j Job) ExitCode() int {
 // cleanup releases all resources tied to the Job. cleanup should be called
 // once the Job is no longer being used.
 func (j Job) cleanup() {
-	j.cancel()
+	j.stop()
 
 	closers := []io.Closer{
 		j.cmdIn,
@@ -180,6 +182,7 @@ func (j Job) cleanup() {
 
 // start launches the Job.
 func (j Job) start() error {
+	logger.Infof("starting child process")
 	if err := j.exec.Start(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -190,7 +193,7 @@ func (j Job) start() error {
 	go func() {
 		err := j.watcher.Watch(j.ctx, tick)
 		if !errors.Is(err, context.Canceled) {
-			j.cancel()
+			j.stop()
 		}
 	}()
 
@@ -209,11 +212,12 @@ func (j Job) start() error {
 		}
 		b, err := json.Marshal(reexecJob)
 		if err != nil {
-			j.cancel()
+			j.stop()
 			return
 		}
+		logger.Infof("writing reexec job: %s", b)
 		if _, err := j.cmdIn.Write(b); err != nil {
-			j.cancel()
+			j.stop()
 			return
 		}
 	}()
@@ -233,6 +237,7 @@ func (j Job) wait() error {
 	if err := j.exec.Wait(); err != nil {
 		return errors.WithStack(err)
 	}
+	logger.Infof("exited - code: %d", j.exec.ProcessState.ExitCode())
 
 	// Determine nature of process exit.
 	switch code := j.exec.ProcessState.ExitCode(); code {

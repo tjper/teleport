@@ -53,6 +53,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 	valid := validator.New()
 	valid.AssertFunc(func() bool { return req.Command != nil }, "command empty")
 	valid.Assert(req.Command.Name != "", "command name empty")
+	// TODO: should limits be able to be empty
 	valid.AssertFunc(func() bool { return req.Limits != nil }, "limits empty")
 	if err := valid.Err(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -80,7 +81,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		Command: req.Command,
 		Status: &pb.StatusDetail{
 			Status:   toStatus(j.Status()),
-			ExitCode: uint32(j.ExitCode()),
+			ExitCode: int32(j.ExitCode()),
 		},
 		Limits: req.Limits,
 	}, nil
@@ -131,7 +132,7 @@ func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.Stat
 	return &pb.StatusResponse{
 		Status: &pb.StatusDetail{
 			Status:   toStatus(j.Status()),
-			ExitCode: uint32(j.ExitCode()),
+			ExitCode: int32(j.ExitCode()),
 		},
 	}, nil
 }

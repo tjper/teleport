@@ -111,6 +111,7 @@ func Exec(ctx context.Context) (int, error) {
 		return CommandFailure, errors.WithStack(err)
 	}
 
+	logger.Infof("starting grandchild; cmd: %v, args: %v", cmd.Path, cmd.Args)
 	if err := cmd.Start(); err != nil {
 		return CommandFailure, errors.WithStack(err)
 	}

@@ -121,7 +121,7 @@ func (s Service) StopJob(_ context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	job.cancel()
+	job.stop()
 
 	return nil
 }
