@@ -57,9 +57,11 @@ func New(
 	executable.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	executable.ExtraFiles = []*os.File{cmdOut, continueOut}
 
+	id := uuid.New()
+	logger.Infof("Constructed New Job; ID: %v", id)
 	return &Job{
 		mutex:       new(sync.RWMutex),
-		ID:          uuid.New(),
+		ID:          id,
 		Owner:       owner,
 		cmd:         cmd,
 		status:      Pending,
@@ -189,6 +191,8 @@ func (j Job) cleanup() {
 
 // start launches the Job.
 func (j *Job) start() error {
+	logger.Infof("starting Job; ID: %v", j.ID)
+
 	if err := j.exec.Start(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -218,6 +222,7 @@ func (j *Job) start() error {
 	}()
 
 	j.setStatus(Running)
+	logger.Infof("Job running; ID: %v", j.ID)
 
 	return nil
 }
@@ -245,11 +250,13 @@ func (j *Job) wait() error {
 		j.setExitCode(code)
 	}
 
+	logger.Infof("Job no longer waiting; status: %v, exit code: %v", j.Status(), j.ExitCode())
 	return nil
 }
 
 // signalContinue instructs the Job's executable to continue.
 func (j Job) signalContinue() error {
+	logger.Infof("Job signal continue to child; ID: %s", j.ID)
 	return errors.WithStack(j.continueIn.Close())
 }
 

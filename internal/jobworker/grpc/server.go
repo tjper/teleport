@@ -58,6 +58,8 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	logger.Infof("processing StartRequest; Command: %v", req.Command)
+
 	j, err := job.New(
 		user,
 		reexec.Command{
@@ -66,7 +68,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		},
 	)
 	if err != nil {
-		logger.Errorf("building job; error: %+v", err)
+		logger.Errorf("building Job; error: %v", err)
 		return nil, status.Error(codes.Internal, "error building job")
 	}
 
@@ -75,10 +77,11 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 		*j,
 		cgroupOptions(req.Limits)...,
 	); err != nil {
-		logger.Errorf("starting job; error: %+v", err)
+		logger.Errorf("starting Job; error: %v", err)
 		return nil, status.Error(codes.Internal, "error starting job")
 	}
 
+	logger.Infof("Job started; ID: %v", j.ID)
 	return &pb.StartResponse{
 		JobId:   j.ID.String(),
 		Command: req.Command,
