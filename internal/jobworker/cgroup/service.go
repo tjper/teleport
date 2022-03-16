@@ -113,14 +113,10 @@ func (s Service) Cleanup() error {
 // placeInRootCgroup moves the pids into the root cgroup.
 func (s Service) placeInRootCgroup(pids []int) error {
 	file := path.Join(s.mountPath, cgroupProcs)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return fmt.Errorf("open root cgroup: %w", err)
-	}
-	defer fd.Close()
 
 	for _, pid := range pids {
-		if _, err := fd.WriteString(strconv.Itoa(pid)); err != nil {
+		value := strconv.Itoa(pid)
+		if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
 			return fmt.Errorf("write to root cgroup: %w", err)
 		}
 	}
@@ -242,15 +238,11 @@ func (s Service) enableControllers(controllers []string) error {
 
 // enableControllers enables the passed controllers for the cgroup path passed.
 func enableControllers(dir string, controllers []string) error {
-	fd, err := os.OpenFile(path.Join(dir, cgroupSubtreeControl), os.O_WRONLY, fileMode)
-	if err != nil {
-		return fmt.Errorf("open %s subtree_control: %w", dir, err)
-	}
-	defer fd.Close()
+	file := path.Join(dir, cgroupSubtreeControl)
 
 	for _, controller := range controllers {
-		_, err := fd.WriteString(fmt.Sprintf("+%s", controller))
-		if err != nil {
+		value := fmt.Sprintf("+%s", controller)
+		if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
 			return fmt.Errorf("enable %s %s controller: %w", dir, controller, err)
 		}
 	}
