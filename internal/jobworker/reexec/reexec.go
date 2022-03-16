@@ -104,14 +104,15 @@ func Exec(ctx context.Context) (int, error) {
 	cmd.Stderr = outfd
 
 	// Wait for continue signal from parent process. This will be sent once
-	// process has been placed in the appropriate cgroup.
+	// process has been placed in the appropriate cgroup. If the continue signal
+	// is not retrieved within 10 seconds of waiting, cancel.
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
 	if err := waitForContinue(ctx, contfd); err != nil {
 		return CommandFailure, errors.WithStack(err)
 	}
 
-	logger.Infof("starting grandchild; cmd: %v, args: %v", cmd.Path, cmd.Args)
 	if err := cmd.Start(); err != nil {
 		return CommandFailure, errors.WithStack(err)
 	}
@@ -137,22 +138,23 @@ func exitCode(err error) int {
 }
 
 // waitForContinue waits for EOF to be received from fd. The parent process
-// will close fd when this process may continue.
-func waitForContinue(ctx context.Context, fd io.ReadCloser) error {
+// will close fd's writer when this process may continue.
+func waitForContinue(ctx context.Context, fd io.Reader) error {
+	errc := make(chan error)
 	go func() {
-		<-ctx.Done()
-		if err := fd.Close(); err != nil {
-			logger.Errorf("closing continue pipe; err: %s", err)
+		b := make([]byte, 1)
+		_, err := fd.Read(b)
+		if errors.Is(err, io.EOF) {
+			errc <- nil
+			return
 		}
+		errc <- err
 	}()
 
-	b := make([]byte, 1)
-	_, err := fd.Read(b)
-	if errors.Is(err, io.EOF) {
-		return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errc:
+		return err
 	}
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	return errExpectedEOF
 }
