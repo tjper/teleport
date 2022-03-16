@@ -128,14 +128,10 @@ type baseController struct {
 // the cgroup.
 func (c baseController) enable() error {
 	file := path.Join(c.cgroup.path, cgroupSubtreeControl)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", file, err)
-	}
-	defer fd.Close()
+	value := fmt.Sprintf("+%s\n", c.name)
 
-	if _, err := fd.WriteString(fmt.Sprintf("+%s\n", c.name)); err != nil {
-		return fmt.Errorf("enable %s %s: %w", file, c.name, err)
+	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
+		return fmt.Errorf("enable %s on %s: %w", c.name, file, err)
 	}
 	return nil
 }
@@ -143,15 +139,11 @@ func (c baseController) enable() error {
 // apply sets the value for the specified control in the controller's cgroup.
 func (c baseController) apply(control, value string) error {
 	file := path.Join(c.cgroup.path, control)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", file, err)
-	}
-	defer fd.Close()
 
-	if _, err := fd.WriteString(value); err != nil {
+	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
 		return fmt.Errorf("apply %s %s to %s: %w", control, value, file, err)
 	}
+
 	return nil
 }
 
