@@ -52,7 +52,7 @@ func (jw JobWorker) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartR
 
 	valid := validator.New()
 	valid.AssertFunc(func() bool { return req.Command != nil }, "command empty")
-	valid.Assert(req.Command.Name != "", "command name empty")
+	valid.AssertFunc(func() bool { return req.Command.Name != "" }, "command name empty")
 	valid.AssertFunc(func() bool { return req.Limits != nil }, "limits empty")
 	if err := valid.Err(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
