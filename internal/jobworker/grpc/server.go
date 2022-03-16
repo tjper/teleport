@@ -93,7 +93,7 @@ func (jw JobWorker) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResp
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
 
-	if req.JobId != "" {
+	if req.JobId == "" {
 		return nil, status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
 	}
 
@@ -120,7 +120,7 @@ func (jw JobWorker) Status(ctx context.Context, req *pb.StatusRequest) (*pb.Stat
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
 
-	if req.JobId != "" {
+	if req.JobId == "" {
 		return nil, status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
 	}
 
@@ -143,7 +143,7 @@ func (jw JobWorker) Output(req *pb.OutputRequest, stream pb.JobWorkerService_Out
 		return status.Error(codes.Unauthenticated, "unauthenticated")
 	}
 
-	if req.JobId != "" {
+	if req.JobId == "" {
 		return status.Error(codes.InvalidArgument, validator.Format("empty job ID"))
 	}
 

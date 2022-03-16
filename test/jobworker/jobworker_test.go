@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,7 +50,7 @@ func TestAuthentication(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config, err := encrypt.NewClientTLSConfig(test.clientCert, test.clientKey, test.caCert)
 			if err != nil {
-				t.Errorf("unexpected error: %+v", err)
+				t.Fatalf("unexpected error: %v", err)
 				return
 			}
 
@@ -63,7 +64,7 @@ func TestAuthentication(t *testing.T) {
 				grpc.WithBlock(),
 			)
 			if !errors.Is(err, test.exp.err) {
-				t.Errorf("unexpected error; actual: %v, expected: %v", err, test.exp.err)
+				t.Fatalf("unexpected error; actual: %v, expected: %v", err, test.exp.err)
 			}
 			if err == nil {
 				conn.Close()
@@ -72,7 +73,7 @@ func TestAuthentication(t *testing.T) {
 	}
 }
 
-func TestStartJob(t *testing.T) {
+func TestStart(t *testing.T) {
 	type expected struct {
 		resp *pb.StartResponse
 		code codes.Code
@@ -144,18 +145,65 @@ func TestStartJob(t *testing.T) {
 			defer cancel()
 
 			resp, err := suite.client.Start(ctx, test.req)
-			if err != nil {
-				t.Errorf("unexpected error: %+v", err)
-				return
+			if status.Code(err) != test.exp.code {
+				t.Fatalf("unexpected code; actual: %v, expected: %v", status.Code(err), test.exp.code)
 			}
 
 			if len(resp.JobId) == 0 {
-				t.Error("expected JobId in response")
+				t.Fatal("expected JobId in response")
 			}
 			resp.JobId = ""
 
 			if !proto.Equal(resp, test.exp.resp) {
-				t.Errorf("unexpected response; actual: %v, expected: %v", resp, test.exp.resp)
+				t.Fatalf("unexpected response; actual: %v, expected: %v", resp, test.exp.resp)
+			}
+		})
+	}
+}
+
+func TestStatus(t *testing.T) {
+	type expected struct {
+		resp *pb.StatusResponse
+		code codes.Code
+	}
+	tests := map[string]struct {
+		start *pb.StartRequest
+		exp   expected
+	}{
+		"ls": {
+			start: &pb.StartRequest{
+				Command: &pb.Command{Name: "ls"},
+				Limits:  &pb.Limits{},
+			},
+			exp: expected{
+				resp: &pb.StatusResponse{
+					Status: &pb.StatusDetail{Status: pb.Status_STATUS_EXITED, ExitCode: 0},
+				},
+				code: codes.OK,
+			},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			suite := setup(t)
+			defer suite.close(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			startResp, err := suite.client.Start(ctx, test.start)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			time.Sleep(time.Second)
+
+			resp, err := suite.client.Status(ctx, &pb.StatusRequest{JobId: startResp.JobId})
+			if status.Code(err) != test.exp.code {
+				t.Fatalf("unexpected code; actual: %v, expected: %v", status.Code(err), test.exp.code)
+			}
+			if !proto.Equal(resp, test.exp.resp) {
+				t.Fatalf("unexpected response; actual: %v, expected: %v", resp, test.exp.resp)
 			}
 		})
 	}
@@ -168,8 +216,7 @@ func setup(t *testing.T) *suite {
 
 	config, err := encrypt.NewClientTLSConfig(clientCert, clientKey, caCert)
 	if err != nil {
-		t.Errorf("unexpected error: %+v", err)
-		return nil
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -182,8 +229,7 @@ func setup(t *testing.T) *suite {
 		grpc.WithBlock(),
 	)
 	if err != nil {
-		t.Errorf("unexpected error: %+v", err)
-		return nil
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	return &suite{
@@ -199,6 +245,6 @@ type suite struct {
 
 func (s suite) close(t *testing.T) {
 	if err := s.conn.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

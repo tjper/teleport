@@ -94,6 +94,7 @@ func (s *Service) StartJob(_ context.Context, job Job, options ...cgroup.CgroupO
 		if err := job.wait(); err != nil {
 			logger.Errorf("%v; job: %v", err, job.ID)
 		}
+		logger.Infof("job no longer waiting")
 
 		if err := s.cgroups.RemoveCgroup(cgroup.ID); err != nil {
 			logger.Errorf("%v; job: %v, cgroup: %v", err, job.ID, cgroup.ID)

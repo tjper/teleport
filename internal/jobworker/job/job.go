@@ -181,7 +181,7 @@ func (j Job) cleanup() {
 }
 
 // start launches the Job.
-func (j Job) start() error {
+func (j *Job) start() error {
 	logger.Infof("starting child process")
 	if err := j.exec.Start(); err != nil {
 		return errors.WithStack(err)
@@ -233,7 +233,7 @@ func (j Job) stop() {
 }
 
 // wait blocks until the Job has exited.
-func (j Job) wait() error {
+func (j *Job) wait() error {
 	if err := j.exec.Wait(); err != nil {
 		return errors.WithStack(err)
 	}
