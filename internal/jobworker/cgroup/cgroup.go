@@ -104,15 +104,12 @@ func (c Cgroup) create() error {
 // cgroup it will be moved to this cgroup.
 func (c Cgroup) placePID(pid int) error {
 	file := path.Join(c.path, cgroupProcs)
-	fd, err := os.OpenFile(file, os.O_WRONLY, fileMode)
-	if err != nil {
-		return fmt.Errorf("open cgroup cgroup.procs: %w", err)
-	}
-	defer fd.Close()
+	value := strconv.Itoa(pid)
 
-	if _, err := fd.WriteString(strconv.Itoa(pid)); err != nil {
+	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
 		return fmt.Errorf("write cgroup pid: %w", err)
 	}
+
 	return nil
 }
 
