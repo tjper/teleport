@@ -61,17 +61,18 @@ func WithDiskReadBps(limit uint64) CgroupOption {
 	return func(c *Cgroup) { c.DiskReadBps = limit }
 }
 
+// controller enables and applies cgroup controls.
+type controller interface {
+	enable() error
+	apply() error
+}
+
 // create creates a jobworker cgroup.
 func (c Cgroup) create() error {
 	if err := os.Mkdir(c.path, fileMode); err != nil {
 		return fmt.Errorf("create cgroup: %w", err)
 	}
 
-	// controller enables and applies cgroup controls
-	type controller interface {
-		enable() error
-		apply() error
-	}
 	// determine which controllers should be enabled.
 	var set []controller
 	if c.Memory > 0 {

@@ -261,7 +261,7 @@ func enableControllers(dir string, controllers []string) error {
 const (
 	// fileMode are the file permissions the jobworker package will use when
 	// accessing files.
-	fileMode = 0555
+	fileMode = 0644
 	// mountPath is the path the cgroup2 filesystem will be mounted on.
 	mountPath = "/cgroup2"
 	// jobWorkerBase is the directory name the jobworker cgroups will exist
