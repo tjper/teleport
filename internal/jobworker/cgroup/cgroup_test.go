@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -251,7 +251,7 @@ func TestControllers(t *testing.T) {
 				t.Fatalf("apply controller; error: %s", err)
 			}
 
-			b, err := os.ReadFile(path.Join(dir, cgroupSubtreeControl))
+			b, err := os.ReadFile(filepath.Join(dir, cgroupSubtreeControl))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -259,7 +259,7 @@ func TestControllers(t *testing.T) {
 				t.Fatalf("controllers unexpected; actual: %s, expected: %s", b, test.exp.enabled)
 			}
 
-			b, err = os.ReadFile(path.Join(dir, test.file))
+			b, err = os.ReadFile(filepath.Join(dir, test.file))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -271,7 +271,7 @@ func TestControllers(t *testing.T) {
 }
 
 func readControllers(dir string) ([]string, error) {
-	fd, err := os.Open(path.Join(dir, cgroupSubtreeControl))
+	fd, err := os.Open(filepath.Join(dir, cgroupSubtreeControl))
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func readControllers(dir string) ([]string, error) {
 }
 
 func readPids(dir string) ([]int, error) {
-	file := path.Join(dir, cgroupProcs)
+	file := filepath.Join(dir, cgroupProcs)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
