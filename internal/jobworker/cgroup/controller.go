@@ -3,7 +3,7 @@ package cgroup
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/tjper/teleport/internal/device"
@@ -125,7 +125,7 @@ type baseController struct {
 // enable enables a controller by writing to the cgroup.subtree_control file of
 // the cgroup.
 func (c baseController) enable() error {
-	file := path.Join(c.cgroup.path, cgroupSubtreeControl)
+	file := filepath.Join(c.cgroup.path, cgroupSubtreeControl)
 	value := fmt.Sprintf("+%s\n", c.name)
 
 	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
@@ -136,7 +136,7 @@ func (c baseController) enable() error {
 
 // apply sets the value for the specified control in the controller's cgroup.
 func (c baseController) apply(control, value string) error {
-	file := path.Join(c.cgroup.path, control)
+	file := filepath.Join(c.cgroup.path, control)
 
 	if err := os.WriteFile(file, []byte(value), fileMode); err != nil {
 		return fmt.Errorf("apply %s %s to %s: %w", control, value, file, err)
