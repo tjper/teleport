@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
-	"time"
 
+	"github.com/tjper/teleport/internal/fsnotify"
 	"github.com/tjper/teleport/internal/jobworker"
 	"github.com/tjper/teleport/internal/jobworker/output"
 	"github.com/tjper/teleport/internal/jobworker/reexec"
@@ -46,6 +46,12 @@ func New(
 	closers = append(closers, continueOut)
 	closers = append(closers, continueIn)
 
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	closers = append(closers, watcher)
+
 	shellCmd, err := os.Executable()
 	if err != nil {
 		cleanup()
@@ -59,8 +65,7 @@ func New(
 	executable.ExtraFiles = []*os.File{cmdOut, continueOut}
 
 	id := uuid.New()
-	logger.Infof("Constructed New Job; ID: %v", id)
-	return &Job{
+	j := &Job{
 		mutex:       new(sync.RWMutex),
 		ID:          id,
 		Owner:       owner,
@@ -74,7 +79,15 @@ func New(
 		cmdOut:      cmdOut,
 		continueIn:  continueIn,
 		continueOut: continueOut,
-	}, nil
+	}
+
+	if err := j.setupOutputWatcher(); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("setup job watcher; error: %w", err)
+	}
+
+	logger.Infof("Constructed New Job; ID: %v", id)
+	return j, nil
 }
 
 // Job represents a single arbitrary command and its related entities
@@ -101,6 +114,12 @@ type Job struct {
 	exec                    *exec.Cmd
 	cmdIn, cmdOut           io.WriteCloser
 	continueIn, continueOut io.WriteCloser
+
+	// watcher monitors the output file for changes.
+	watcher *fsnotify.Watcher
+	// listeners is a map of id and channel pairs. Each channel is notified when
+	// watcher detects output file activity.
+	listeners map[string]chan struct{}
 }
 
 // StreamOutput streams Job's output to the passed stream channel in chunks of
@@ -113,6 +132,7 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// TODO: output DNE
 	fd, err := os.Open(output.File(j.ID))
 	if err != nil {
 		return fmt.Errorf("open job output; error: %w", err)
@@ -139,14 +159,13 @@ func (j Job) StreamOutput(ctx context.Context, stream chan<- []byte, chunkSize i
 		}
 		// If EOF and job is running, wait for output from job.
 		if errors.Is(err, io.EOF) && j.Status() == Running {
-			// TODO: This is a placeholder. Streaming implementation using inotify
-			// API will be in another PR. This will be replaced by something like
-			// select {
-			// case <-ctx.Done():
-			//   return ctx.Err()
-			// case <-j.watchOutput()
-			// }
-			time.Sleep(time.Second)
+			err := j.waitForOutput(ctx)
+			if errors.Is(err, context.Canceled) {
+				return ctx.Err()
+			}
+			if err != nil {
+				logger.Errorf("waiting for job output; job: %v, error: %v", j.ID, err)
+			}
 			continue
 		}
 		/// If EOF and job is not running, return.
@@ -174,9 +193,13 @@ func (j Job) ExitCode() int {
 }
 
 // cleanup releases all resources tied to the Job. cleanup should be called
-// once the Job is no longer being used.
+// once the Job is no longer running.
 func (j Job) cleanup() {
 	j.stop()
+
+	if err := j.closeOutputWatcher(); err != nil {
+		logger.Errorf("cleanup watcher; error: %v", err)
+	}
 
 	closers := []io.Closer{
 		j.cmdIn,
@@ -231,6 +254,85 @@ func (j *Job) start() error {
 // stop terminates the Job.
 func (j Job) stop() {
 	j.cancel()
+}
+
+// newOutputWatcher sets up the watcher that monitors a Job's output file.
+// The returned *fsnotify.Watcher should be closed when done being used.
+func (j *Job) setupOutputWatcher() error {
+	if err := os.WriteFile(output.File(j.ID), nil, output.FileMode); err != nil {
+		return fmt.Errorf("setup job output file; job: %v, error: %w", j.ID, err)
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("new job watcher; job: %v, error: %w", j.ID, err)
+	}
+
+	if _, err := watcher.AddWatch(output.File(j.ID)); err != nil {
+		watcher.Close()
+		return fmt.Errorf("add job watcher; job: %v, error: %w", j.ID, err)
+	}
+
+	j.watcher = watcher
+	go j.readWatcherEvents()
+
+	return nil
+}
+
+// closeOutputWatcher cleans up and closes the Job's output watcher.
+func (j Job) closeOutputWatcher() error {
+	if err := j.watcher.RemoveWatch(output.File(j.ID)); err != nil {
+		logger.Errorf("remove job watcher; job: %v, error: %w", j.ID, err)
+	}
+	if err := j.watcher.Close(); err != nil {
+		return fmt.Errorf("close job watcher; job: %v, error: %w", j.ID, err)
+	}
+	return nil
+}
+
+// readWatcherEvents listens to the output file events stream and notifies
+// listeners when events occur.
+func (j *Job) readWatcherEvents() {
+	for {
+		select {
+		// TODO: check when this closes
+		case <-j.ctx.Done():
+			return
+		case <-j.watcher.Events:
+			j.mutex.RLock()
+			for _, listener := range j.listeners {
+				listener <- struct{}{}
+			}
+			j.mutex.RUnlock()
+		}
+	}
+}
+
+// waitForOutput waits for some filesystem event to occur on the Job's output
+// file.
+func (j *Job) waitForOutput(ctx context.Context) error {
+	key := uuid.New().String()
+	listen := make(chan struct{})
+
+	j.mutex.Lock()
+	j.listeners[key] = listen
+	j.mutex.Unlock()
+
+	var err error
+	select {
+	case <-j.ctx.Done():
+		err = j.ctx.Err()
+	case <-ctx.Done():
+		err = ctx.Err()
+	case <-listen:
+		err = nil
+	}
+
+	j.mutex.Lock()
+	delete(j.listeners, key)
+	j.mutex.Unlock()
+
+	return err
 }
 
 // wait blocks until the Job has exited.
