@@ -295,15 +295,11 @@ func (j Job) closeOutputWatcher() error {
 func (j *Job) readWatcherEvents() {
 	for {
 		select {
-		// TODO: check when this closes
 		case <-j.ctx.Done():
+			j.notifyListeners()
 			return
 		case <-j.watcher.Events:
-			j.mutex.RLock()
-			for _, listener := range j.listeners {
-				listener <- struct{}{}
-			}
-			j.mutex.RUnlock()
+			j.notifyListeners()
 		}
 	}
 }
@@ -320,8 +316,6 @@ func (j *Job) waitForOutput(ctx context.Context) error {
 
 	var err error
 	select {
-	case <-j.ctx.Done():
-		err = j.ctx.Err()
 	case <-ctx.Done():
 		err = ctx.Err()
 	case <-listen:
@@ -333,6 +327,16 @@ func (j *Job) waitForOutput(ctx context.Context) error {
 	j.mutex.Unlock()
 
 	return err
+}
+
+// notifyListeners signals to all current Job listeners that the Job output
+// file has changed.
+func (j *Job) notifyListeners() {
+	j.mutex.RLock()
+	for _, listener := range j.listeners {
+		listener <- struct{}{}
+	}
+	j.mutex.RUnlock()
 }
 
 // wait blocks until the Job has exited.
