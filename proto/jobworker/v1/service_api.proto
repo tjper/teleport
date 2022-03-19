@@ -91,18 +91,21 @@ message Limits {
 message StatusDetail {
   // status
   Status status    = 1;
-  // exit_code is only populated when status == STATUS_EXITED.
-  uint32 exit_code = 2;
+  // exit_code is only populated when status == STATUS_EXITED. Otherwise,
+  // exit_code = -1.
+  int32 exit_code = 2;
 }
 
 // Status is the various states a job may be in.
 enum Status {
   // STATUS_UNSPECIFIED job status is unknown.
   STATUS_UNSPECIFIED = 0;
+  // STATUS_PENDING job is pending and has not yet begun running.
+  STATUS_PENDING     = 1;
   // STATUS_RUNNING job is running.
-  STATUS_RUNNING     = 1;
+  STATUS_RUNNING     = 2;
   // STATUS_STOPPED job has been stopped by JobWorkerService.
-  STATUS_STOPPED     = 2;
+  STATUS_STOPPED     = 3;
   // STATUS_EXITED job has exited.
-  STATUS_EXITED      = 3;
+  STATUS_EXITED      = 4;
 }

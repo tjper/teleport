@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"runtime"
+	"strings"
 )
 
 // New creates a Logger instance.
@@ -26,15 +28,33 @@ type Logger struct {
 
 // Errorf prints an error log-level message.
 func (l Logger) Errorf(msg string, args ...interface{}) {
-	l.Printf("[ERROR] %s", fmt.Sprintf(msg, args...))
+	file, line := caller(2)
+	l.Printf("[ERROR] %s:%d --- %s", file, line, fmt.Sprintf(msg, args...))
 }
 
 // Warnf prints a warn log-level message.
 func (l Logger) Warnf(msg string, args ...interface{}) {
-	l.Printf("[WARN] %s", fmt.Sprintf(msg, args...))
+	file, line := caller(2)
+	l.Printf("[WARN] %s:%d --- %s", file, line, fmt.Sprintf(msg, args...))
 }
 
 // Infof prints an info log-level message.
 func (l Logger) Infof(msg string, args ...interface{}) {
-	l.Printf("[INFO] %s", fmt.Sprintf(msg, args...))
+	file, line := caller(2)
+	l.Printf("[INFO] %s:%d --- %s", file, line, fmt.Sprintf(msg, args...))
+}
+
+func caller(depth int) (string, int) {
+	_, file, line, ok := runtime.Caller(depth)
+	parts := strings.Split(file, "/")
+
+	// shorten file if it consists of more than 3 parts
+	if len(parts) > 3 {
+		file = strings.Join(parts[len(parts)-3:], "/")
+	}
+	if !ok {
+		file = "???"
+		line = 0
+	}
+	return file, line
 }
