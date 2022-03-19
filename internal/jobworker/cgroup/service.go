@@ -75,6 +75,8 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 		option(cgroup)
 	}
 
+	logger.Infof("Creating Cgroup; ID: %v", id)
+
 	if err := cgroup.create(); err != nil {
 		return nil, err
 	}
@@ -84,12 +86,16 @@ func (s Service) CreateCgroup(options ...CgroupOption) (*Cgroup, error) {
 
 // PlaceInCgroup places the pid in the Service cgroup specified.
 func (s Service) PlaceInCgroup(cgroup Cgroup, pid int) error {
+	logger.Infof("Placing pid in Cgroup; ID: %v, pid: %d", cgroup.ID, pid)
+
 	return cgroup.placePID(pid)
 }
 
 // RemoveCgroup removes the jobworker cgroup uniquely identified by the
 // specified id.
 func (s Service) RemoveCgroup(id uuid.UUID) error {
+	logger.Infof("Removing Cgroup; ID: %v", id)
+
 	cgroup := Cgroup{ID: id, service: s, path: filepath.Join(s.path, id.String())}
 
 	return cgroup.remove()
@@ -98,6 +104,7 @@ func (s Service) RemoveCgroup(id uuid.UUID) error {
 // Cleanup removes all jobworker Service resources. Whenever a Service instance
 // is used, Cleanup should always be called before application close.
 func (s Service) Cleanup() error {
+	logger.Infof("Cleaning up jobworker Service Cgroups")
 	if err := s.cleanup(); err != nil {
 		return err
 	}
